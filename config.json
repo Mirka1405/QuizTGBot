@@ -1,4 +1,11 @@
 {
-    "question_file": "TI_Team_Intelligence_Questions.json",
-    "translation_files": "locale"
+    "question_file": "TI_All_Categories_By_Role.json",
+    "locale_folder": "locale",
+    "industry_file": "industries.txt",
+    "email": {
+        "smtp_server": "smtp.yandex.ru",
+        "smtp_port": 465,
+        "sender_email": "teamintelligenceindex@yandex.ru",
+        "receiver_email": "mironsamokhvalov@gmail.com"
+    }
 }
