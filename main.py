@@ -317,7 +317,7 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if update.message.text != "/skip":
         # Store the answer with the question text as key
-        question = test.open_questions_left[0] if test.open_questions_left else "Unknown question"
+        question = context.user_data["last_question"]
         test.open_answers[question] = update.message.text
     
     # Ask next question
@@ -333,16 +333,17 @@ async def send_results_by_email(test: Test):
     
     # Format answers as string
     answers_str = "{\n"
-    answers_str += f'    "industry": {test.industry},\n'
-    answers_str += f'    "role": {test.role},\n'
+    answers_str += f'    "industry": "{test.industry}",\n'
+    answers_str += f'    "role": "{test.role}",\n'
     answers_str += f'    "team_size": {test.team_size},\n'
-    answers_str += f'    "person_cost": "{test.person_cost if test.person_cost else "not specified"}",\n'
+    answers_str += f'    "person_cost": {test.person_cost if test.person_cost else "null"},\n'
+    answers_str += '    "answers": {\n'
     
     for question, answer in test.answers.items():
-        answers_str += f'    "{question}": {answer},\n'
+        answers_str += f'        "{question}": {answer},\n'
     for question, answer in test.open_answers.items():
-        answers_str += f'    "{question}": "{answer}",\n'
-    answers_str = answers_str.rstrip(",\n") + "\n}"
+        answers_str += f'        "{question}": "{answer}",\n'
+    answers_str = answers_str.rstrip(",\n") + "\n    }\n}"
     
     # Create email message
     msg = MIMEText(answers_str)
@@ -391,7 +392,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
                                    caption=Settings.get_locale("results").format(average),
                                    show_caption_above_media=True)
     
-    loss = (100-average*10)*float(test.person_cost)
+    loss = (1-average/10)*float(test.person_cost)
     await update.message.reply_text(Settings.get_locale("results_losscalc").format(test.person_cost,test.team_size,loss,loss*test.team_size))
     
     # Send results by email
