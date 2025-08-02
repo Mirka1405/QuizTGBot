@@ -4,10 +4,11 @@
 Skill Assessment Bot with industry selection, role selection, and questionnaire
 """
 
-import json
+import io
 import random
+import re
 
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -18,121 +19,40 @@ from telegram.ext import (
 )
 
 from dotenv import load_dotenv
-from os import getenv, listdir
-from os.path import join, exists
+from os import getenv
 
 from spidergram import generate_spidergram
 
 import smtplib
 from email.mime.text import MIMEText
 
-# Define conversation states
-INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION = range(6)
+from engine import *
 
-class Test:
-    def __init__(self, userid: int):
-        self.userid = userid
-        self.score: dict[str, int] = {}  # category: score
-        self.role: str = None
-        self.industry: str = None
-        self.team_size: int = None
-        self.person_cost: str = None
-        self.questions_left: list[tuple[str, str]] = []  # (category_id, question)
-        self.open_questions_left: list[str] = []  # List of open questions
-        self.current_category: str = None
-        self.answers: dict[str, int] = {}
-        self.open_answers: dict[str, str] = {}
+INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL = range(7)
 
-class QuestionCategory:
-    def __init__(self, display: str, questions: list[str] | None = None):
-        self.display_name = display
-        self.questions = questions or []
-    def __repr__(self):
-        return f"QuestionCategory({self.display_name}, {self.questions})"
-
-class Role:
-    def __init__(self, display: str, questions: dict[str, QuestionCategory] | None = None, open_questions: list[str] | None = None):
-        self.display_name = display
-        self.questions = questions or {}
-        self.open_questions = open_questions or []
-    def __repr__(self):
-        return f"Role({self.display_name}, {self.questions}, open_questions={self.open_questions})"
-
-class Settings:
-    config: dict[str, str] = {}
-    locales: dict[str, dict[str, str]] = {}
-    ongoing_tests: dict[int, Test] = {}
-    roles: dict[str, Role] = {}
-    industries: list[str] = []
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /start with company ID parameter"""
+    company_id = None
+    kb = ["/starttest"]
+    if context.args and context.args[0].isdigit():
+        company_id = int(context.args[0])
+    else:
+        kb.append("/newcompany")
     
-    @classmethod
-    def get_config(cls, file: str = "config.json"):
-        try:
-            with open(file, "r", encoding="utf-8") as f:
-                cls.config = json.load(f)
-        except FileNotFoundError:
-            raise FileNotFoundError("Config file not found.")
-    
-    @classmethod
-    def load_locales(cls, dir: str):
-        for filename in listdir(dir):
-            if filename.endswith(".json"):
-                name = filename[:-5]
-                try:
-                    with open(join(dir, filename), "r", encoding="utf-8") as f:
-                        cls.locales[name] = json.load(f)
-                except Exception as e:
-                    print(f"Error loading locale {filename}: {e}")
-    
-    @classmethod
-    def get_locale(cls, string: str, locale: str = "ru_RU"):
-        return cls.locales.get(locale, {}).get(string, string)
-    
-    @classmethod
-    def get_questions(cls, file: str):
-        try:
-            with open(file, "r", encoding="utf-8") as f:
-                content = json.load(f)
-        except FileNotFoundError:
-            raise FileNotFoundError("Question file not found.")
-        
-        roles: dict[str, str] = content.get("roles", {})
-        categories: dict[str, str] = content.get("categories", {})
-        open_questions: list[str] = content.get("open_questions", [])
-        
-        cls.roles = {role_id: Role(display_name) for role_id, display_name in roles.items()}
-        
-        for role_id in cls.roles:
-            role_data = content.get(role_id, {})
-            category_obj: dict[str, QuestionCategory] = {}
-            
-            for cat_id, questions in role_data.items():
-                if cat_id in categories:
-                    category_obj[cat_id] = QuestionCategory(
-                        display=categories[cat_id],
-                        questions=questions
-                    )
-            
-            cls.roles[role_id].questions = category_obj
-            cls.roles[role_id].open_questions = open_questions
-    
-    @classmethod
-    def load_industries(cls, file: str = "industries.txt"):
-        if exists(file):
-            with open(file, "r", encoding="utf-8") as f:
-                cls.industries = [line.strip() for line in f if line.strip()]
-        else:
-            raise FileNotFoundError(f"Нет файла индустрий {file}")
-    
-    @classmethod
-    def get_score_keyboard(cls):
-        return [[str(i) for i in range(1, 11)]]
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        Settings.get_locale("start_reply"),
-        reply_markup=ReplyKeyboardMarkup([["/starttest"]], resize_keyboard=True, one_time_keyboard=True)
+        Settings.get_locale("start_reply").format(Settings.get_locale("start_company_detected") if company_id else ''),
+        reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
     )
+    context.user_data['company_id'] = company_id
+
+async def new_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Create a new company"""
+    user_id = update.effective_user.id
+    company_id = Settings.db.create_company(user_id)
+    
+    invite_link = f"https://t.me/{context.bot.username}?start={company_id}"
+    await update.message.reply_text(Settings.get_locale("company_created").format(invite_link,company_id),reply_markup=ReplyKeyboardMarkup([["/starttest"]], resize_keyboard=True))
+    context.user_data['company_id'] = company_id
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(Settings.get_locale("about"))
@@ -280,7 +200,6 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return await finish_test(update, context)
 
 async def receive_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Process user's answer and ask next question"""
     user_id = update.effective_user.id
     test = Settings.ongoing_tests.get(user_id)
     
@@ -298,12 +217,12 @@ async def receive_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             reply_markup=ReplyKeyboardMarkup(Settings.get_score_keyboard(), resize_keyboard=True))
         return QUESTION
     
-    test.answers[context.user_data["last_question"]] = rating
+    question = context.user_data["last_question"]
+    test.answers[question] = (rating, test.current_category)
     
     # Add rating to current category
     test.score[test.current_category] += rating
     
-    # Ask next question
     return await ask_next_question(update, context)
 
 async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -323,7 +242,20 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Ask next question
     return await ask_next_question(update, context)
 
-async def send_results_by_email(test: Test):
+def markdown_to_html(text):
+    text = re.sub(r'^# (.*)$', r'<h1>\1</h1>', text, flags=re.MULTILINE)
+    text = re.sub(r'^## (.*)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
+    text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'\*(.*?)\*', r'<em>\1</em>', text)
+    text = re.sub(r'^\* (.*)$', r'<li>\1</li>', text, flags=re.MULTILINE)
+    text = re.sub(r'(<li>.*</li>)', r'<ul>\1</ul>', text, flags=re.DOTALL)
+    text = text.replace('\n', '<br>')
+    text = re.sub(r'`(.*?)`', r'<code>\1</code>', text)
+    
+    return text
+def wrap_email_html(content):
+    return Settings.html.replace("CONTENT",content).replace("NUMBER",Settings.config["consultation_number"])
+async def send_results_by_email(text: str,toemail:str):
     """Send the collected answers via email"""
     if not 'email' in Settings.config:
         print("Email configuration not found")
@@ -331,34 +263,66 @@ async def send_results_by_email(test: Test):
     
     email_config = Settings.config['email']
     
-    # Format answers as string
-    answers_str = "{\n"
-    answers_str += f'    "industry": "{test.industry}",\n'
-    answers_str += f'    "role": "{test.role}",\n'
-    answers_str += f'    "team_size": {test.team_size},\n'
-    answers_str += f'    "person_cost": {test.person_cost if test.person_cost else "null"},\n'
-    answers_str += '    "answers": {\n'
-    
-    for question, answer in test.answers.items():
-        answers_str += f'        "{question}": {answer},\n'
-    for question, answer in test.open_answers.items():
-        answers_str += f'        "{question}": "{answer}",\n'
-    answers_str = answers_str.rstrip(",\n") + "\n    }\n}"
     
     # Create email message
-    msg = MIMEText(answers_str)
-    msg['Subject'] = f"Test results from user {test.userid}"
+    msg = MIMEText(wrap_email_html(markdown_to_html(text)),'html')
+    msg['Subject'] = f"Результаты анализа командной работы"
     msg['From'] = email_config['sender_email']
-    msg['To'] = email_config['receiver_email']
+    msg['To'] = toemail
     
     # Send email
     try:
         with smtplib.SMTP_SSL(email_config['smtp_server'], email_config['smtp_port']) as server:
-            # server.starttls()
             server.login(email_config['sender_email'], getenv("EMAIL_PASSWORD"))
             server.send_message(msg)
     except Exception as e:
         print(f"Failed to send email: {e}")
+
+async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send company results as CSV file"""
+    user_id = update.effective_user.id
+    
+    # Find companies created by this user
+    cursor = Settings.db.conn.cursor()
+    cursor.execute("SELECT id FROM companies WHERE created_by = ?", (user_id,))
+    companies = cursor.fetchall()
+    
+    if not companies:
+        await update.message.reply_text(Settings.get_locale("company_results_nocompany"))
+        return
+    
+    for company in companies:
+        company_id = company[0]
+        
+        try:
+            # Generate CSV content
+            csv_content = Settings.db.get_company_results_csv(company_id)
+            
+            # Send as file
+            await update.message.reply_document(
+                document=io.BytesIO(csv_content.encode('utf-8')),
+                filename=f"company_{company_id}_results.csv",
+                caption=Settings.get_locale("company_results")
+            )
+            
+            # Send summary
+            cursor.execute("""
+            SELECT COUNT(*), AVG(average_ti) 
+            FROM results 
+            WHERE company_id = ?
+            """, (company_id,))
+            summary = cursor.fetchone()
+            
+            if summary and summary[0] > 0:
+                await update.message.reply_text(Settings.get_locale("company_results_full").format(
+                    company_id, summary[0], round(summary[1], 1)
+                ))
+            else:
+                await update.message.reply_text(Settings.get_locale("company_results_none"))
+                
+        except Exception as e:
+            await update.message.reply_text(Settings.get_locale("error_generating_report"))
+            raise e
 
 async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Calculate and display results"""
@@ -372,31 +336,50 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     # Prepare results
     role_data = Settings.roles[test.role]
     results = {}
-    average = 0
-    total_qs = 0
+
+    company_id = context.user_data.get('company_id')
+    username = update.effective_user.username or update.effective_user.full_name
+    Settings.db.save_results(test, username, company_id)
     
+    recs = ""
+    free_emoji = Settings.config["free_rec_emoji"]
+    paid_emoji = Settings.config["paid_rec_emoji"]
     for cat_id, score in test.score.items():
-        average += score
         category = role_data.questions[cat_id]
         results[category.display_name] = score / len(category.questions) if len(category.questions) > 0 else 0
-        total_qs += len(category.questions)
-    
-    if total_qs > 0:
-        average /= total_qs
+        if results[category.display_name] > 7.5:
+            recs += f"`{cat_id}` *(сильная сторона)*\n" + \
+                    "\n".join(f"{free_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["free"]) + "\n" + \
+                    "\n".join(f"{paid_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["paid"]) + "\n\n"
+        elif results[category.display_name] > 5:
+            recs += f"`{cat_id}` *(средний уровень)*\n" + \
+                    f"{free_emoji}{random.choice(Settings.recommendations["weak"][cat_id]["free"])}\n" + \
+                    "\n".join(f"{paid_emoji}{i}" for i in random.sample(Settings.recommendations["weak"][cat_id]["paid"], 2)) + "\n\n"
+        else:
+            recs += f"`{cat_id}` *(зона риска)*\n" + \
+                    "\n".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "\n" + \
+                    "\n".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "\n\n"
     
     img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
                                f"{test.industry}: {Settings.roles[test.role].display_name}")
     
+    average = test.average
     # Send the image
     await update.message.reply_photo(photo=img_buffer, 
                                    caption=Settings.get_locale("results").format(average),
                                    show_caption_above_media=True)
-    
-    loss = (1-average/10)*float(test.person_cost)
-    await update.message.reply_text(Settings.get_locale("results_losscalc").format(test.person_cost,test.team_size,loss,loss*test.team_size))
-    
-    # Send results by email
-    await send_results_by_email(test)
+    await update.message.reply_text(Settings.get_locale("results_score_sum_up").format(Settings.config["consultation_number"]))
+    # await update.message.reply_markdown(recs)
+    context.user_data["recs"] = recs
+    try:
+        if test.person_cost and test.person_cost.isdigit():
+            person_cost = float(test.person_cost)
+            loss = (1 - average/10) * person_cost
+            total_loss = loss * test.team_size
+            await update.message.reply_text(Settings.get_locale("results_losscalc").format(
+                person_cost, test.team_size, round(loss,2), round(total_loss,2)))
+    except (ValueError, TypeError):
+        pass
     
     return ConversationHandler.END
 
@@ -412,26 +395,44 @@ async def cancel_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     )
     return ConversationHandler.END
 
+async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if "recs" not in context.user_data.keys():
+        await update.message.reply_text("Вы еще не прошли тест.")
+        return ConversationHandler.END
+    await update.message.reply_text("Пожалуйста, отправьте ваш почтовый адрес.")
+    return GETTING_EMAIL
+def is_valid_email(email):
+    if not email or len(email) > 320: return False
+    pattern = r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$"
+    return bool(re.fullmatch(pattern, email, re.VERBOSE))
+async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not is_valid_email(update.message.text):
+        await update.message.reply_text("Пожалуйста, пришлите рабочий адрес почты.")
+        return GETTING_EMAIL
+    await send_results_by_email(context.user_data["recs"],update.message.text)
+    await update.message.reply_text("Отправлено.")
+    return ConversationHandler.END
 def main() -> None:
     """Start the bot."""
     # Load environment and configuration
     if not load_dotenv():
         raise FileNotFoundError("В этой папке нет файла \".env\". Создайте файл .env с полем TOKEN=<токен бота> и EMAIL_PASSWORD=<пароль от почты в конфиге>.")
     
-    try:
-        Settings.get_config()
-        Settings.load_locales(Settings.config.get("locale_folder", "locales"))
-        Settings.get_questions(Settings.config.get("question_file", "questions.json"))
-        Settings.load_industries(Settings.config.get("industry_file", "industries.txt"))
-    except Exception as e:
-        raise Exception(f"Ошибка инициализации: {e}")
-    
+
+    Settings.get_config()
+    Settings.init_db(Settings.config.get("database", "quiz_results.db"))
+    Settings.load_locales(Settings.config.get("locale_folder", "locales"))
+    Settings.get_questions(Settings.config.get("question_file", "questions.json"))
+    Settings.load_industries(Settings.config.get("industry_file", "industries.txt"))
+    Settings.load_recommendations(Settings.config.get("recommendations_file","recommendation.json"))
+    Settings.load_html_template(Settings.config.get("email_template", "email_template.html"))
+
     # Create application
     application = Application.builder().token(getenv("TOKEN")).build()
     
     # Add conversation handler for the test
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("starttest", start_test)],
+        entry_points=[CommandHandler("starttest", start_test),CommandHandler("getrecommendations", get_recommendations)],
         states={
             INDUSTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_industry)],
             ROLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_role)],
@@ -445,6 +446,9 @@ def main() -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_open_answer),
                 CommandHandler("skip", receive_open_answer)
             ],
+            GETTING_EMAIL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email)
+            ]
         },
         fallbacks=[CommandHandler("cancel", cancel_test)],
     )
@@ -452,6 +456,8 @@ def main() -> None:
     # Register handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("about", about_command))
+    application.add_handler(CommandHandler("newcompany", new_company))
+    application.add_handler(CommandHandler("myresults", my_results))
     application.add_handler(conv_handler)
     
     # Run the bot

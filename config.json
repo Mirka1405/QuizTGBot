@@ -5,7 +5,12 @@
     "email": {
         "smtp_server": "smtp.yandex.ru",
         "smtp_port": 465,
-        "sender_email": "teamintelligenceindex@yandex.ru",
-        "receiver_email": "mironsamokhvalov@gmail.com"
-    }
+        "sender_email": "teamintelligenceindex@yandex.ru"
+    },
+    "database":"quiz_results.db",
+    "consultation_number":"+79015802142",
+    "recommendations_file":"recommendation.json",
+    "free_rec_emoji":"✅",
+    "paid_rec_emoji":"💸",
+    "email_template":"email_template.html"
 }
