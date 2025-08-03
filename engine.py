@@ -144,7 +144,8 @@ class DatabaseManager:
         
         CREATE TABLE IF NOT EXISTS companies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_by INTEGER
+            created_by INTEGER,
+            is_active BOOLEAN DEFAULT 1
         );
         
         CREATE TABLE IF NOT EXISTS num_questions (

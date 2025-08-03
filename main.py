@@ -34,18 +34,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
     company_id = None
     kb = ["/starttest"]
-    if context.args and context.args[0].isdigit():
+    
+    if context.args:
+        if not context.args[0].isdigit():
+            await update.message.reply_text(
+                Settings.get_locale("error_companylinkstopped"),
+                reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
+            )
+            return
+        
         company_id = int(context.args[0])
-    else:
-        kb.append("/newcompany")
+        
+        cursor = Settings.db.conn.cursor()
+        cursor.execute("SELECT is_active FROM companies WHERE id = ?", (company_id,))
+        result = cursor.fetchone()
+        if not result:
+            await update.message.reply_text(
+                Settings.get_locale("error_companylinkstopped"),
+                reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
+            )
+            return
+    
+    welcome_msg = Settings.get_locale("start_reply").format(
+        Settings.get_locale("start_company_detected") if company_id else ''
+    )
+    
+    if company_id:
+        context.user_data['company_id'] = company_id
     
     await update.message.reply_text(
-        Settings.get_locale("start_reply").format(Settings.get_locale("start_company_detected") if company_id else ''),
+        welcome_msg,
         reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
     )
-    context.user_data['company_id'] = company_id
 
-async def new_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Create a new company"""
     user_id = update.effective_user.id
     company_id = Settings.db.create_company(user_id)
@@ -148,12 +170,10 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
     all_questions = []
     role_data = Settings.roles[test.role]
     for cat_id, category in role_data.questions.items():
-        test.score[cat_id] = 0  # Initialize score for category
+        test.score[cat_id] = 0
         for question in category.questions:
             all_questions.append((cat_id, question))
     
-    # Randomize question order
-    random.shuffle(all_questions)
     test.questions_left = all_questions
     
     # Prepare open questions
@@ -167,21 +187,22 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Ask the next question in the queue"""
+    last_category = context.user_data.get("last_cat_id")
     user_id = update.effective_user.id
     test = Settings.ongoing_tests.get(user_id)
     
     if not test:
         return await finish_test(update, context)
     
-    # First handle all regular questions
     if test.questions_left:
-        # Get next question
         cat_id, question = test.questions_left.pop(0)
         context.user_data["last_question"] = question
         test.current_category = cat_id
+        if cat_id!=last_category:
+            question=Settings.get_locale("new_category").format(cat_id)+question
+            context.user_data["last_cat_id"] = cat_id
         
-        # Ask question with 1-10 keyboard
-        await update.message.reply_text(
+        await update.message.reply_markdown(
             question,
             reply_markup=ReplyKeyboardMarkup(Settings.get_score_keyboard(), resize_keyboard=True)
         )
@@ -242,17 +263,6 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Ask next question
     return await ask_next_question(update, context)
 
-def markdown_to_html(text):
-    text = re.sub(r'^# (.*)$', r'<h1>\1</h1>', text, flags=re.MULTILINE)
-    text = re.sub(r'^## (.*)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
-    text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
-    text = re.sub(r'\*(.*?)\*', r'<em>\1</em>', text)
-    text = re.sub(r'^\* (.*)$', r'<li>\1</li>', text, flags=re.MULTILINE)
-    text = re.sub(r'(<li>.*</li>)', r'<ul>\1</ul>', text, flags=re.DOTALL)
-    text = text.replace('\n', '<br>')
-    text = re.sub(r'`(.*?)`', r'<code>\1</code>', text)
-    
-    return text
 def wrap_email_html(content):
     return Settings.html.replace("CONTENT",content).replace("NUMBER",Settings.config["consultation_number"])
 async def send_results_by_email(text: str,toemail:str):
@@ -265,7 +275,7 @@ async def send_results_by_email(text: str,toemail:str):
     
     
     # Create email message
-    msg = MIMEText(wrap_email_html(markdown_to_html(text)),'html')
+    msg = MIMEText(wrap_email_html(text),'html')
     msg['Subject'] = f"Результаты анализа командной работы"
     msg['From'] = email_config['sender_email']
     msg['To'] = toemail
@@ -324,6 +334,17 @@ async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(Settings.get_locale("error_generating_report"))
             raise e
 
+async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mark all of this user's tests as finished"""
+    user_id = update.effective_user.id
+    cursor = Settings.db.conn.cursor()
+
+    cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
+    cursor = Settings.db.conn.commit()
+    await update.message.reply_text(
+        Settings.get_locale("company_deleted"),
+        reply_markup=ReplyKeyboardRemove()
+    )
 async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Calculate and display results"""
     user_id = update.effective_user.id
@@ -340,30 +361,31 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     company_id = context.user_data.get('company_id')
     username = update.effective_user.username or update.effective_user.full_name
     Settings.db.save_results(test, username, company_id)
+
+    average = round(test.average,2)
     
-    recs = ""
+    recs = Settings.get_locale("email_score").format(average,100-average*10)
     free_emoji = Settings.config["free_rec_emoji"]
     paid_emoji = Settings.config["paid_rec_emoji"]
     for cat_id, score in test.score.items():
         category = role_data.questions[cat_id]
         results[category.display_name] = score / len(category.questions) if len(category.questions) > 0 else 0
         if results[category.display_name] > 7.5:
-            recs += f"`{cat_id}` *(сильная сторона)*\n" + \
-                    "\n".join(f"{free_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["free"]) + "\n" + \
-                    "\n".join(f"{paid_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["paid"]) + "\n\n"
+            recs += Settings.get_locale("aspect_strong").format(cat_id,results[category.display_name]) + \
+                    "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["free"]) + "<br>" + \
+                    "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["paid"]) + "<br><br>"
         elif results[category.display_name] > 5:
-            recs += f"`{cat_id}` *(средний уровень)*\n" + \
-                    f"{free_emoji}{random.choice(Settings.recommendations["weak"][cat_id]["free"])}\n" + \
-                    "\n".join(f"{paid_emoji}{i}" for i in random.sample(Settings.recommendations["weak"][cat_id]["paid"], 2)) + "\n\n"
+            recs += Settings.get_locale("aspect_medium").format(cat_id,results[category.display_name]) + \
+                    f"{free_emoji}{random.choice(Settings.recommendations["weak"][cat_id]["free"])}<br>" + \
+                    "<br>".join(f"{paid_emoji}{i}" for i in random.sample(Settings.recommendations["weak"][cat_id]["paid"], 2)) + "<br><br>"
         else:
-            recs += f"`{cat_id}` *(зона риска)*\n" + \
-                    "\n".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "\n" + \
-                    "\n".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "\n\n"
+            recs += Settings.get_locale("aspect_weak").format(cat_id,results[category.display_name]) + \
+                    "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "<br>" + \
+                    "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
     
     img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
                                f"{test.industry}: {Settings.roles[test.role].display_name}")
     
-    average = test.average
     # Send the image
     await update.message.reply_photo(photo=img_buffer, 
                                    caption=Settings.get_locale("results").format(average),
@@ -377,7 +399,8 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             loss = (1 - average/10) * person_cost
             total_loss = loss * test.team_size
             await update.message.reply_text(Settings.get_locale("results_losscalc").format(
-                person_cost, test.team_size, round(loss,2), round(total_loss,2)))
+                round(100-average*10), round(loss,2), round(total_loss,2)
+                ))
     except (ValueError, TypeError):
         pass
     
@@ -420,7 +443,7 @@ def main() -> None:
     
 
     Settings.get_config()
-    Settings.init_db(Settings.config.get("database", "quiz_results.db"))
+    Settings.init_db(Settings.config.get("database", "database.db"))
     Settings.load_locales(Settings.config.get("locale_folder", "locales"))
     Settings.get_questions(Settings.config.get("question_file", "questions.json"))
     Settings.load_industries(Settings.config.get("industry_file", "industries.txt"))
@@ -456,8 +479,9 @@ def main() -> None:
     # Register handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("about", about_command))
-    application.add_handler(CommandHandler("newcompany", new_company))
-    application.add_handler(CommandHandler("myresults", my_results))
+    application.add_handler(CommandHandler("grouptest", group_test))
+    # application.add_handler(CommandHandler("myresults", my_results)) # TODO: paywall this
+    application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
     application.add_handler(conv_handler)
     
     # Run the bot
