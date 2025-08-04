@@ -48,6 +48,7 @@ class Settings:
     db: "DatabaseManager" = None
     recommendations: dict[str,dict[str,dict[str,str]]] = {}
     html: str = "{0}{1}"
+    categories_locales: dict[str,str] = {}
 
     @classmethod
     def load_html_template(cls,filename:str="email_template.html"):
@@ -87,6 +88,7 @@ class Settings:
         except FileNotFoundError:
             raise FileNotFoundError("Question file not found.")
         
+        cls.categories_locales = content["categories"]
         roles: dict[str, str] = content.get("roles", {})
         categories: dict[str, str] = content.get("categories", {})
         open_questions: list[str] = content.get("open_questions", [])

@@ -48,7 +48,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor = Settings.db.conn.cursor()
         cursor.execute("SELECT is_active FROM companies WHERE id = ?", (company_id,))
         result = cursor.fetchone()
-        if not result:
+        if not result or not result[0]:
             await update.message.reply_text(
                 Settings.get_locale("error_companylinkstopped"),
                 reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
@@ -56,7 +56,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     
     welcome_msg = Settings.get_locale("start_reply").format(
-        Settings.get_locale("start_company_detected") if company_id else ''
+        Settings.get_locale("start_company_detected") if company_id else Settings.get_locale("start_recommendations_nocompany")
     )
     
     if company_id:
@@ -199,7 +199,7 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         context.user_data["last_question"] = question
         test.current_category = cat_id
         if cat_id!=last_category:
-            question=Settings.get_locale("new_category").format(cat_id)+question
+            question=Settings.get_locale("new_category").format(cat_id,Settings.categories_locales[cat_id])+question
             context.user_data["last_cat_id"] = cat_id
         
         await update.message.reply_markdown(
