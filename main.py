@@ -394,14 +394,15 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
                     "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
     
     img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
-                               f"{test.industry}: {Settings.roles[test.role].display_name}")
+                               f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
     
     sum_up_text = "\n"+Settings.get_locale("results_score_sum_up")
+    loss_text = ""
     if test.person_cost and test.person_cost.isdigit():
         person_cost = float(test.person_cost)
         loss = (1 - average/10) * person_cost
         total_loss = loss * test.team_size
-        sum_up_text+="\n"+Settings.get_locale("results_losscalc").format(
+        loss_text=Settings.get_locale("results_losscalc").format(
                 round(100-average*10), round(total_loss,2)
             )
         
@@ -418,7 +419,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         recomms_text+="\n"+";\n".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
     recomms_text+="."
     await update.message.reply_photo(photo=img_buffer, 
-                                   caption=Settings.get_locale("results").format(average,round(100-average*10))+recomms_text+sum_up_text,
+                                   caption=Settings.get_locale("results").format(average,round(100-average*10),loss_text)+recomms_text+sum_up_text,
                                    show_caption_above_media=True)
 
     context.user_data["recs"] = recs
