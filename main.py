@@ -80,30 +80,16 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(Settings.get_locale("about"))
 
 async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Start the test by asking for industry"""
-    # Create keyboard with industries
-    keyboard = [[industry] for industry in Settings.industries]
-    await update.message.reply_text(
-        Settings.get_locale("industry_select"),
-        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    )
-    return INDUSTRY
-
-async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Store industry and ask for role"""
-    user_industry = update.message.text
-    context.user_data['industry'] = user_industry
-    
-    # Create keyboard with roles
+    """Start the test by asking for role first"""
     keyboard = [[role.display_name] for role in Settings.roles.values()]
     await update.message.reply_text(
-        Settings.get_locale("industry_selected").format(user_industry),
+        Settings.get_locale("role_select"),
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
     return ROLE
 
 async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Store role and ask for team size"""
+    """Store role and ask for industry"""
     user_role_display = update.message.text
     
     # Find role ID from display name
@@ -117,18 +103,45 @@ async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         await update.message.reply_text(Settings.get_locale("error_wrongrole"))
         return ROLE
     
+    # Store role in context
+    context.user_data['role_id'] = role_id
+    
+    # Create keyboard with industries
+    keyboard = [[industry] for industry in Settings.industries]
+    await update.message.reply_text(
+        Settings.get_locale("industry_select"),
+        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    )
+    return INDUSTRY
+
+async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Store industry and create test instance"""
+    user_industry = update.message.text
+    role_id = context.user_data['role_id']
+    
     # Create test instance
     user_id = update.effective_user.id
     test = Test(user_id)
-    test.industry = context.user_data['industry']
+    test.industry = user_industry
     test.role = role_id
     
     # Store test
     Settings.ongoing_tests[user_id] = test
-    
-    # Ask for team size
-    await update.message.reply_text(Settings.get_locale("team_size_question"))
-    return TEAM_SIZE
+    if not context.user_data.get("company_id"):
+        await update.message.reply_text(Settings.get_locale("team_size_question"))
+        return TEAM_SIZE
+    else:
+        all_questions = []
+        role_data = Settings.roles[test.role]
+        for cat_id, category in role_data.questions.items():
+            test.score[cat_id] = 0
+            for question in category.questions:
+                all_questions.append((cat_id, question))
+        test.questions_left = all_questions
+        test.open_questions_left = role_data.open_questions.copy()
+        await update.message.reply_text(Settings.get_locale("start_test_explanation"),
+                                    reply_markup=ReplyKeyboardRemove())
+        return await ask_next_question(update, context)
 
 async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store team size and ask for person cost (optional)"""
@@ -187,7 +200,6 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Ask the next question in the queue"""
-    last_category = context.user_data.get("last_cat_id")
     user_id = update.effective_user.id
     test = Settings.ongoing_tests.get(user_id)
     
@@ -198,9 +210,7 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         cat_id, question = test.questions_left.pop(0)
         context.user_data["last_question"] = question
         test.current_category = cat_id
-        if cat_id!=last_category:
-            question=Settings.get_locale("new_category").format(cat_id,Settings.categories_locales[cat_id])+question
-            context.user_data["last_cat_id"] = cat_id
+        question=Settings.get_locale("new_category").format(cat_id,Settings.categories_locales[cat_id])+question
         
         await update.message.reply_markdown(
             question,
@@ -386,23 +396,29 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
                                f"{test.industry}: {Settings.roles[test.role].display_name}")
     
-    # Send the image
+    sum_up_text = "\n"+Settings.get_locale("results_score_sum_up")+\
+            Settings.get_locale("results_score_sum_up_group" if context.user_data.get("company_id") else "results_score_sum_up_sole")\
+            .format(round(100-test.average*10),Settings.config["consultation_number"])
+    if test.person_cost and test.person_cost.isdigit():
+        person_cost = float(test.person_cost)
+        loss = (1 - average/10) * person_cost
+        total_loss = loss * test.team_size
+        sum_up_text+="\n\n"+Settings.get_locale("results_losscalc").format(
+                round(100-average*10), round(total_loss,2)
+            )
+    recomms_text = ""
+    additions = [k for k,v in results.items() if v<4]
+    if not additions: additions = [min(results)]
+    if len(additions)==1:
+        cat = list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(additions[0])]
+        recomms_text = Settings.get_locale(f"results_weak_{cat}")
+    else:
+        recomms_text+="\n"+";\n".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
     await update.message.reply_photo(photo=img_buffer, 
-                                   caption=Settings.get_locale("results").format(average),
+                                   caption=Settings.get_locale("results").format(average,round(100-average*10))+recomms_text+sum_up_text,
                                    show_caption_above_media=True)
-    await update.message.reply_text(Settings.get_locale("results_score_sum_up").format(Settings.config["consultation_number"]))
-    # await update.message.reply_markdown(recs)
+    recomms_text+="."
     context.user_data["recs"] = recs
-    try:
-        if test.person_cost and test.person_cost.isdigit():
-            person_cost = float(test.person_cost)
-            loss = (1 - average/10) * person_cost
-            total_loss = loss * test.team_size
-            await update.message.reply_text(Settings.get_locale("results_losscalc").format(
-                round(100-average*10), round(loss,2), round(total_loss,2)
-                ))
-    except (ValueError, TypeError):
-        pass
     
     return ConversationHandler.END
 
@@ -420,9 +436,9 @@ async def cancel_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if "recs" not in context.user_data.keys():
-        await update.message.reply_text("Вы еще не прошли тест.")
+        await update.message.reply_text(Settings.get_locale("error_notest"))
         return ConversationHandler.END
-    await update.message.reply_text("Пожалуйста, отправьте ваш почтовый адрес.")
+    await update.message.reply_text(Settings.get_locale("request_email"))
     return GETTING_EMAIL
 def is_valid_email(email):
     if not email or len(email) > 320: return False
@@ -433,7 +449,7 @@ async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         await update.message.reply_text("Пожалуйста, пришлите рабочий адрес почты.")
         return GETTING_EMAIL
     await send_results_by_email(context.user_data["recs"],update.message.text)
-    await update.message.reply_text("Отправлено.")
+    await update.message.reply_text(Settings.get_locale("email_sent"))
     return ConversationHandler.END
 def main() -> None:
     """Start the bot."""

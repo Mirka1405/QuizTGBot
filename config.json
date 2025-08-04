@@ -8,7 +8,7 @@
         "sender_email": "teamintelligenceindex@yandex.ru"
     },
     "database":"database.db",
-    "consultation_number":"+79015802142",
+    "consultation_number":"@irsamo",
     "recommendations_file":"recommendation.json",
     "free_rec_emoji":"✅",
     "paid_rec_emoji":"💸",

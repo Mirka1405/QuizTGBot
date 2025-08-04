@@ -20,6 +20,7 @@ class Test:
     
     @property
     def average(self):
+        if len(self.answers)+len(self.questions_left)==0: return 0
         return sum(self.score.values())/(len(self.answers)+len(self.questions_left))
 
 class QuestionCategory:
@@ -173,7 +174,7 @@ class DatabaseManager:
             company_id INTEGER REFERENCES companies(id),
             role TEXT NOT NULL,
             industry TEXT NOT NULL,
-            team_size INTEGER NOT NULL,
+            team_size INTEGER,
             person_cost INTEGER,
             average_ti INTEGER NOT NULL,
             estimated_losses INTEGER,
