@@ -416,10 +416,11 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         recomms_text = Settings.get_locale(f"results_weak_{cat}")
     else:
         recomms_text+="\n"+";\n".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
+    recomms_text+="."
     await update.message.reply_photo(photo=img_buffer, 
                                    caption=Settings.get_locale("results").format(average,round(100-average*10))+recomms_text+sum_up_text,
                                    show_caption_above_media=True)
-    recomms_text+="."
+
     context.user_data["recs"] = recs
     
     return ConversationHandler.END
