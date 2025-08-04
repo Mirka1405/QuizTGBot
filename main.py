@@ -396,16 +396,18 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
                                f"{test.industry}: {Settings.roles[test.role].display_name}")
     
-    sum_up_text = "\n"+Settings.get_locale("results_score_sum_up")+\
-            Settings.get_locale("results_score_sum_up_group" if context.user_data.get("company_id") else "results_score_sum_up_sole")\
-            .format(round(100-test.average*10),Settings.config["consultation_number"])
+    sum_up_text = "\n"+Settings.get_locale("results_score_sum_up")
     if test.person_cost and test.person_cost.isdigit():
         person_cost = float(test.person_cost)
         loss = (1 - average/10) * person_cost
         total_loss = loss * test.team_size
-        sum_up_text+="\n\n"+Settings.get_locale("results_losscalc").format(
+        sum_up_text+="\n"+Settings.get_locale("results_losscalc").format(
                 round(100-average*10), round(total_loss,2)
             )
+        
+    sum_up_text+="\n"+Settings.get_locale("results_score_sum_up_group" if context.user_data.get("company_id") else "results_score_sum_up_sole")\
+            .format(Settings.config["consultation_number"])
+    
     recomms_text = ""
     additions = [k for k,v in results.items() if v<4]
     if not additions: additions = [min(results)]
