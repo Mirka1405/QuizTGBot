@@ -12,9 +12,5 @@
     "recommendations_file":"recommendation.json",
     "free_rec_emoji":"✅",
     "paid_rec_emoji":"💸",
-    "email_template":"email_template.html",
-    "admins":[
-        "mironsam1405",
-        "irsamo"
-    ]
+    "email_template":"email_template.html"
 }

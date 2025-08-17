@@ -4,6 +4,8 @@
 Skill Assessment Bot with industry selection, role selection, and questionnaire
 """
 
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 import io
 import random
 import re
@@ -275,7 +277,7 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 def wrap_email_html(content):
     return Settings.html.replace("CONTENT",content).replace("NUMBER",Settings.config["consultation_number"])
-async def send_results_by_email(text: str,toemail:str):
+async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None):
     """Send the collected answers via email"""
     if not 'email' in Settings.config:
         print("Email configuration not found")
@@ -283,14 +285,19 @@ async def send_results_by_email(text: str,toemail:str):
     
     email_config = Settings.config['email']
     
-    
-    # Create email message
-    msg = MIMEText(wrap_email_html(text),'html')
-    msg['Subject'] = f"Результаты анализа командной работы"
+    msg = MIMEMultipart()
+    msg['Subject'] = Settings.get_locale("email_title")
     msg['From'] = email_config['sender_email']
     msg['To'] = toemail
-    
-    # Send email
+    msg.attach(MIMEText(wrap_email_html(text),'html'))
+    if image:
+        image.seek(0)
+        img_data = image.read()
+        img = MIMEImage(img_data)
+        # img.add_header('Content-Disposition', 'attachment', filename="team_assessment.png")
+        img.add_header("Content-ID", "<image1>")
+        msg.attach(img)
+
     try:
         with smtplib.SMTP_SSL(email_config['smtp_server'], email_config['smtp_port']) as server:
             server.login(email_config['sender_email'], getenv("EMAIL_PASSWORD"))
@@ -374,29 +381,14 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     average = round(test.average,2)
     
-    recs = Settings.get_locale("email_score").format(average,100-average*10)
-    free_emoji = Settings.config["free_rec_emoji"]
-    paid_emoji = Settings.config["paid_rec_emoji"]
     for cat_id, score in test.score.items():
         category = role_data.questions[cat_id]
         results[category.display_name] = score / len(category.questions) if len(category.questions) > 0 else 0
-        if results[category.display_name] > 7.5:
-            recs += Settings.get_locale("aspect_strong").format(cat_id,results[category.display_name]) + \
-                    "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["free"]) + "<br>" + \
-                    "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["paid"]) + "<br><br>"
-        elif results[category.display_name] > 5:
-            recs += Settings.get_locale("aspect_medium").format(cat_id,results[category.display_name]) + \
-                    f"{free_emoji}{random.choice(Settings.recommendations["weak"][cat_id]["free"])}<br>" + \
-                    "<br>".join(f"{paid_emoji}{i}" for i in random.sample(Settings.recommendations["weak"][cat_id]["paid"], 2)) + "<br><br>"
-        else:
-            recs += Settings.get_locale("aspect_weak").format(cat_id,results[category.display_name]) + \
-                    "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "<br>" + \
-                    "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
     
     img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
                                f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
     
-    sum_up_text = "\n"+Settings.get_locale("results_score_sum_up")
+    sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None else "\n"
     loss_text = ""
     if test.person_cost and test.person_cost.isdigit():
         person_cost = float(test.person_cost)
@@ -421,8 +413,6 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     await update.message.reply_photo(photo=img_buffer, 
                                    caption=Settings.get_locale("results").format(average,round(100-average*10),loss_text)+recomms_text+sum_up_text,
                                    show_caption_above_media=True)
-
-    context.user_data["recs"] = recs
     
     return ConversationHandler.END
 
@@ -437,11 +427,51 @@ async def cancel_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         reply_markup=ReplyKeyboardRemove()
     )
     return ConversationHandler.END
+async def generate_recommendations(test: Test) -> str:
+    """Generate recommendation text based on test results"""
+    role_data = Settings.roles[test.role]
+    average = round(test.average, 2)
+    
+    recs = Settings.get_locale("email_score").format(average, 100-average*10)
+    free_emoji = Settings.config["free_rec_emoji"]
+    paid_emoji = Settings.config["paid_rec_emoji"]
+    
+    results = {}
+    for cat_id, score in test.score.items():
+        category = role_data.questions[cat_id]
+        category_score = score
+        results[category.display_name] = category_score
+        if category_score > 7.5:
+            recs += Settings.get_locale("aspect_strong").format(cat_id, category_score) + \
+                    "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["free"]) + "<br>" + \
+                    "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["paid"]) + "<br><br>"
+        elif category_score > 5:
+            recs += Settings.get_locale("aspect_medium").format(cat_id, category_score) + \
+                    f"{free_emoji}{random.choice(Settings.recommendations['weak'][cat_id]['free'])}<br>" + \
+                    "<br>".join(f"{paid_emoji}{i}" for i in random.sample(Settings.recommendations["weak"][cat_id]["paid"], 2)) + "<br><br>"
+        else:
+            recs += Settings.get_locale("aspect_weak").format(cat_id, category_score) + \
+                    "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "<br>" + \
+                    "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
+    
+    image = generate_spidergram(list(results.keys()), list(results.values()),
+                               f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
+    return recs,image
 
 async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if "recs" not in context.user_data.keys():
+    """Start the email conversation - just verify test exists"""
+    user_id = update.effective_user.username or update.effective_user.full_name
+    
+    cursor = Settings.db.conn.cursor()
+    cursor.execute("""
+        SELECT 1 FROM results 
+        WHERE telegram_username = ?
+    """, (user_id,))
+    
+    if not cursor.fetchone():
         await update.message.reply_text(Settings.get_locale("error_notest"))
         return ConversationHandler.END
+    
     await update.message.reply_text(Settings.get_locale("request_email"))
     return GETTING_EMAIL
 def is_valid_email(email):
@@ -449,11 +479,65 @@ def is_valid_email(email):
     pattern = r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$"
     return bool(re.fullmatch(pattern, email, re.VERBOSE))
 async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Now that we have email, generate and send recommendations"""
     if not is_valid_email(update.message.text):
-        await update.message.reply_text("Пожалуйста, пришлите рабочий адрес почты.")
+        await update.message.reply_text(Settings.get_locale("bad_email_address"))
         return GETTING_EMAIL
-    await send_results_by_email(context.user_data["recs"],update.message.text)
+
+    # Fetch data and generate recommendations only now
+    cursor = Settings.db.conn.cursor()
+    
+    # Get basic result info
+    cursor.execute("""
+        SELECT id, role, industry, team_size, person_cost, average_ti 
+        FROM results 
+        WHERE telegram_username = ?
+        ORDER BY timestamp DESC 
+        LIMIT 1
+    """, (update.effective_user.username,))
+    result = cursor.fetchone()
+    
+    if not result:
+        await update.message.reply_text(Settings.get_locale("error_notest"))
+        return ConversationHandler.END
+    await update.message.reply_text(Settings.get_locale("email_generating"))
+    
+    result_id, role, industry, team_size, person_cost, average_ti = result
+    
+    test = Test(update.effective_user.id)
+    test.role = list(Settings.role_locales.keys())[list(Settings.role_locales.values()).index(role)]
+    test.industry = industry
+    test.team_size = team_size
+    test.person_cost = person_cost
+    test.score = {}
+    test.force_average_by_score = True
+
+    cursor.execute("""
+        SELECT nq.category_id, nq.text, na.answer
+        FROM num_answers na
+        JOIN num_questions nq ON na.question_id = nq.id
+        WHERE na.id = ?
+    """, (result_id,))
+    
+    # Calculate category averages
+    category_scores = {}
+    cat_names = list(Settings.categories_locales.keys())
+    for cat_id, question_text, answer in cursor.fetchall():
+        cat_name = cat_names[cat_id-1]
+        if cat_name not in category_scores:
+            category_scores[cat_name] = {'sum': 0, 'count': 0}
+        category_scores[cat_name]['sum'] += answer
+        category_scores[cat_name]['count'] += 1
+    
+    for cat_id, scores in category_scores.items():
+        test.score[cat_id] = scores['sum'] / scores['count'] if scores['count'] > 0 else 0
+    
+
+    # Generate and send recommendations
+    recs, image = await generate_recommendations(test)
+    await send_results_by_email(recs, update.message.text, image)
     await update.message.reply_text(Settings.get_locale("email_sent"))
+
     return ConversationHandler.END
 def main() -> None:
     """Start the bot."""

@@ -17,9 +17,11 @@ class Test:
         self.current_category: str = None
         self.answers: dict[str, tuple[int, str]] = {}
         self.open_answers: dict[str, str] = {}  # {question: answer}
+        self.force_average_by_score: bool = False
     
     @property
     def average(self):
+        if self.force_average_by_score: return 0 if not self.score else sum(self.score.values())/len(self.score.values())
         if len(self.answers)+len(self.questions_left)==0: return 0
         return sum(self.score.values())/(len(self.answers)+len(self.questions_left))
 
@@ -50,6 +52,7 @@ class Settings:
     recommendations: dict[str,dict[str,dict[str,str]]] = {}
     html: str = "{0}{1}"
     categories_locales: dict[str,str] = {}
+    role_locales: dict[str,str] = {}
 
     @classmethod
     def load_html_template(cls,filename:str="email_template.html"):
@@ -90,6 +93,7 @@ class Settings:
             raise FileNotFoundError("Question file not found.")
         
         cls.categories_locales = content["categories"]
+        cls.role_locales = content["roles"]
         roles: dict[str, str] = content.get("roles", {})
         categories: dict[str, str] = content.get("categories", {})
         open_questions: list[str] = content.get("open_questions", [])
