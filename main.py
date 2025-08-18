@@ -598,7 +598,7 @@ async def exec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         command = ' '.join(context.args)
             
         proc = await asyncio.create_subprocess_exec(
-            *shlex.split(command),
+            command,
             stdout=PIPE, stderr=PIPE, shell=True
         )
         stdout, stderr = await proc.communicate()
