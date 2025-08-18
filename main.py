@@ -597,7 +597,7 @@ async def exec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         command = ' '.join(context.args)
             
-        proc = await asyncio.create_subprocess_exec(
+        proc = await asyncio.create_subprocess_shell(
             command,
             stdout=PIPE, stderr=PIPE, shell=True
         )
