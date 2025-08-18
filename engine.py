@@ -53,7 +53,12 @@ class Settings:
     html: str = "{0}{1}"
     categories_locales: dict[str,str] = {}
     role_locales: dict[str,str] = {}
+    admins: set[str] = {}
 
+    @classmethod
+    def load_admins(cls,filename:str="admins.txt"):
+        with open(filename,"r",encoding="utf-8") as f:
+            cls.admins = {i for i in f.readlines()}
     @classmethod
     def load_html_template(cls,filename:str="email_template.html"):
         with open(filename,"r",encoding="utf-8") as f:

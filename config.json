@@ -12,5 +12,6 @@
     "recommendations_file":"recommendation.json",
     "free_rec_emoji":"✅",
     "paid_rec_emoji":"💸",
-    "email_template":"email_template.html"
+    "email_template":"email_template.html",
+    "admins_file":"admins.txt"
 }

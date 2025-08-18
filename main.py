@@ -9,6 +9,10 @@ from email.mime.multipart import MIMEMultipart
 import io
 import random
 import re
+from subprocess import Popen, PIPE
+import os
+import shlex
+import asyncio
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -432,7 +436,7 @@ async def generate_recommendations(test: Test) -> str:
     role_data = Settings.roles[test.role]
     average = round(test.average, 2)
     
-    recs = Settings.get_locale("email_score").format(average, 100-average*10)
+    recs = Settings.get_locale("email_score").format(average, round(100-average*10,2))
     free_emoji = Settings.config["free_rec_emoji"]
     paid_emoji = Settings.config["paid_rec_emoji"]
     
@@ -442,15 +446,15 @@ async def generate_recommendations(test: Test) -> str:
         category_score = score
         results[category.display_name] = category_score
         if category_score > 7.5:
-            recs += Settings.get_locale("aspect_strong").format(cat_id, category_score) + \
+            recs += Settings.get_locale("aspect_percentage").format(cat_id, category_score) + \
                     "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["free"]) + "<br>" + \
                     "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["paid"]) + "<br><br>"
         elif category_score > 5:
-            recs += Settings.get_locale("aspect_medium").format(cat_id, category_score) + \
+            recs += Settings.get_locale("aspect_percentage").format(cat_id, category_score) + \
                     f"{free_emoji}{random.choice(Settings.recommendations['weak'][cat_id]['free'])}<br>" + \
                     "<br>".join(f"{paid_emoji}{i}" for i in random.sample(Settings.recommendations["weak"][cat_id]["paid"], 2)) + "<br><br>"
         else:
-            recs += Settings.get_locale("aspect_weak").format(cat_id, category_score) + \
+            recs += Settings.get_locale("aspect_percentage").format(cat_id, category_score) + \
                     "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "<br>" + \
                     "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
     
@@ -539,6 +543,107 @@ async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await update.message.reply_text(Settings.get_locale("email_sent"))
 
     return ConversationHandler.END
+async def check_admin(update: Update) -> bool:
+    """Check if user is admin"""
+    username = update.effective_user.username
+    return username in Settings.admins if username else False
+
+async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send journalctl logs (admin only)"""
+    if not await check_admin(update):
+        return
+    
+    try:
+        lines = int(context.args[0]) if context.args else 50
+        lines = min(lines, 1000)  # Limit for safety
+    except (ValueError, IndexError):
+        lines = 50
+    
+    proc = await asyncio.create_subprocess_exec(
+        'journalctl', '-u', 'tgbot', '-n', str(lines),
+        stdout=PIPE, stderr=PIPE
+    )
+    stdout, stderr = await proc.communicate()
+    
+    if proc.returncode != 0:
+        await update.message.reply_text(f"Error getting logs:\n{stderr.decode()}")
+        return
+    
+    logs = stdout.decode()
+    for i in range(0, len(logs), 4096):
+        await update.message.reply_text(logs[i:i+4096])
+
+async def exec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Execute remote command (admin only)"""
+    if not await check_admin(update):
+        return
+    
+    if not context.args:
+        await update.message.reply_text("Usage: /exec <command>")
+        return
+    
+    try:
+        command = ''.join(context.args)
+            
+        proc = await asyncio.create_subprocess_exec(
+            *shlex.split(command),
+            stdout=PIPE, stderr=PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        
+        output = f"Return code: {proc.returncode}\n"
+        if stdout:
+            output += f"STDOUT:\n{stdout.decode()}\n"
+        if stderr:
+            output += f"STDERR:\n{stderr.decode()}\n"
+            
+        await update.message.reply_text(output[:4000])  # Truncate if too long
+        
+    except Exception as e:
+        await update.message.reply_text(f"Error: {str(e)}")
+
+async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send requested file (admin only)"""
+    if not await check_admin(update):
+        return
+    
+    if not context.args:
+        await update.message.reply_text("Usage: /getfile <path>")
+        return
+    
+    path = ' '.join(context.args)
+    
+    try:
+        with open(path, 'rb') as f:
+            await update.message.reply_document(f)
+    except Exception as e:
+        await update.message.reply_text(f"Error: {str(e)}")
+
+async def put_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Receive and save file (admin only)"""
+    if not await check_admin(update):
+        return
+    
+    if not update.message.document and not update.message.reply_to_message:
+        await update.message.reply_text("Reply to a file message with /putfile <destination_path>")
+        return
+    
+    try:
+        # Get destination path from command args
+        if not context.args:
+            await update.message.reply_text("Usage: /putfile <destination_path>")
+            return
+        
+        dest_path = ' '.join(context.args)
+        
+        message = update.message.reply_to_message or update.message
+        file = await message.document.get_file()
+        
+        await file.download_to_drive(dest_path)
+        await update.message.reply_text(f"File saved to {dest_path}")
+        
+    except Exception as e:
+        await update.message.reply_text(f"Error: {str(e)}")
 def main() -> None:
     """Start the bot."""
     # Load environment and configuration
@@ -553,9 +658,15 @@ def main() -> None:
     Settings.load_industries(Settings.config.get("industry_file", "industries.txt"))
     Settings.load_recommendations(Settings.config.get("recommendations_file","recommendation.json"))
     Settings.load_html_template(Settings.config.get("email_template", "email_template.html"))
+    Settings.load_admins(Settings.config.get("admins_file","admins.txt"))
 
     # Create application
     application = Application.builder().token(getenv("TOKEN")).build()
+
+    application.add_handler(CommandHandler("logs", get_logs))
+    application.add_handler(CommandHandler("exec", exec_command))
+    application.add_handler(CommandHandler("getfile", get_file))
+    application.add_handler(CommandHandler("putfile", put_file))
     
     # Add conversation handler for the test
     conv_handler = ConversationHandler(
