@@ -58,7 +58,7 @@ class Settings:
     @classmethod
     def load_admins(cls,filename:str="admins.txt"):
         with open(filename,"r",encoding="utf-8") as f:
-            cls.admins = {i for i in f.readlines()}
+            cls.admins = {i.strip() for i in f.readlines()}
     @classmethod
     def load_html_template(cls,filename:str="email_template.html"):
         with open(filename,"r",encoding="utf-8") as f:

@@ -95,7 +95,7 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ROLE
 
 async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Store role and ask for industry"""
+    """Store role and ask for industry (if first in group) or skip (if in group)"""
     user_role_display = update.message.text
     
     # Find role ID from display name
@@ -112,6 +112,17 @@ async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # Store role in context
     context.user_data['role_id'] = role_id
     
+    # Check if this is a group test and industry already exists
+    company_id = context.user_data.get('company_id')
+    if company_id:
+        cursor = Settings.db.conn.cursor()
+        cursor.execute("SELECT industry FROM results WHERE company_id = ? LIMIT 1", (company_id,))
+        existing_industry = cursor.fetchone()
+        
+        if existing_industry:
+            # Skip industry selection, use existing one
+            return await receive_industry(update, context, existing_industry[0])
+    
     # Create keyboard with industries
     keyboard = [[industry] for industry in Settings.industries]
     await update.message.reply_text(
@@ -120,9 +131,9 @@ async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     )
     return INDUSTRY
 
-async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Store industry and create test instance"""
-    user_industry = update.message.text
+async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE, predefined_industry: str = None) -> int:
+    """Store industry (either from user input or predefined) and create test instance"""
+    user_industry = predefined_industry or update.message.text
     role_id = context.user_data['role_id']
     
     # Create test instance
@@ -133,6 +144,7 @@ async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     
     # Store test
     Settings.ongoing_tests[user_id] = test
+    
     if not context.user_data.get("company_id"):
         await update.message.reply_text(Settings.get_locale("team_size_question"))
         return TEAM_SIZE
@@ -145,10 +157,10 @@ async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 all_questions.append((cat_id, question))
         test.questions_left = all_questions
         test.open_questions_left = role_data.open_questions.copy()
+        
         await update.message.reply_text(Settings.get_locale("start_test_explanation"),
-                                    reply_markup=ReplyKeyboardRemove())
+                                      reply_markup=ReplyKeyboardRemove())
         return await ask_next_question(update, context)
-
 async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store team size and ask for person cost (optional)"""
     user_id = update.effective_user.id
@@ -375,7 +387,6 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         await update.message.reply_text(Settings.get_locale("error"))
         return ConversationHandler.END
     
-    # Prepare results
     role_data = Settings.roles[test.role]
     results = {}
 
@@ -416,7 +427,8 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     recomms_text+="."
     await update.message.reply_photo(photo=img_buffer, 
                                    caption=Settings.get_locale("results").format(average,round(100-average*10),loss_text)+recomms_text+sum_up_text,
-                                   show_caption_above_media=True)
+                                   show_caption_above_media=True,
+                                   reply_markup=ReplyKeyboardRemove())
     
     return ConversationHandler.END
 
