@@ -9,10 +9,9 @@ from email.mime.multipart import MIMEMultipart
 import io
 import random
 import re
-from subprocess import Popen, PIPE
-import os
-import shlex
+from subprocess import PIPE
 import asyncio
+from telegram.error import NetworkError
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -205,15 +204,14 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
         for question in category.questions:
             all_questions.append((cat_id, question))
     
+    random.shuffle(all_questions)
     test.questions_left = all_questions
     
-    # Prepare open questions
     test.open_questions_left = role_data.open_questions.copy()
     
     await update.message.reply_text(Settings.get_locale("start_test_explanation"),
                                   reply_markup=ReplyKeyboardRemove())
     
-    # Ask first question
     return await ask_next_question(update, context)
 
 async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -228,7 +226,6 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         cat_id, question = test.questions_left.pop(0)
         context.user_data["last_question"] = question
         test.current_category = cat_id
-        question=Settings.get_locale("new_category").format(cat_id,Settings.categories_locales[cat_id])+question
         
         await update.message.reply_markdown(
             question,
@@ -236,7 +233,6 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         return QUESTION
     
-    # Then handle open questions
     if test.open_questions_left:
         question = test.open_questions_left.pop(0)
         context.user_data["last_question"] = question
@@ -245,7 +241,6 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             reply_markup=ReplyKeyboardMarkup([["/skip"]], resize_keyboard=True))
         return OPEN_QUESTION
     
-    # No more questions
     return await finish_test(update, context)
 
 async def receive_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -656,6 +651,18 @@ async def put_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
     except Exception as e:
         await update.message.reply_text(f"Error: {str(e)}")
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Pong!")
+
+
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle errors gracefully"""
+    if isinstance(context.error, NetworkError):
+        print(f"Network error occurred: {context.error}")
+    else:
+        print(f"Unexpected error: {context.error}")
+
 def main() -> None:
     """Start the bot."""
     # Load environment and configuration
@@ -673,12 +680,19 @@ def main() -> None:
     Settings.load_admins(Settings.config.get("admins_file","admins.txt"))
 
     # Create application
-    application = Application.builder().token(getenv("TOKEN")).build()
+    application = Application.builder().token(getenv("TOKEN")).concurrent_updates(False)\
+                                                            .read_timeout(30)\
+                                                            .write_timeout(30)\
+                                                            .connect_timeout(30)\
+                                                            .pool_timeout(30)\
+                                                            .build()
 
+    application.add_error_handler(error_handler)
     application.add_handler(CommandHandler("logs", get_logs))
     application.add_handler(CommandHandler("exec", exec_command))
     application.add_handler(CommandHandler("getfile", get_file))
     application.add_handler(CommandHandler("putfile", put_file))
+    application.add_handler(CommandHandler("ping", ping))
     
     # Add conversation handler for the test
     conv_handler = ConversationHandler(

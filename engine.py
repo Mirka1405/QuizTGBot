@@ -2,6 +2,7 @@ import json
 from os import listdir
 import sqlite3
 from os.path import join, exists
+import time
 from typing import Optional, Dict, List, Tuple
 
 class Test:
@@ -18,6 +19,7 @@ class Test:
         self.answers: dict[str, tuple[int, str]] = {}
         self.open_answers: dict[str, str] = {}  # {question: answer}
         self.force_average_by_score: bool = False
+        self.last_active = time.time()
     
     @property
     def average(self):
@@ -138,9 +140,16 @@ class Settings:
     def get_score_keyboard(cls):
         return [[str(i) for i in range(1, 11)]]
     
+    @classmethod
+    def cleanup_old_tests(cls):
+        now = time.time()
+        for user_id, test in list(cls.ongoing_tests.items()):
+            if now - test.last_active > 3600:
+                del Settings.ongoing_tests[user_id]
+    
 class DatabaseManager:
     def __init__(self, db_path: str = "quiz_results.db"):
-        self.conn = sqlite3.connect(db_path)
+        self.conn = sqlite3.connect(db_path,timeout=30)
         self.create_tables()
         self._init_categories()
     
