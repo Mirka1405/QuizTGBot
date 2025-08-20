@@ -418,7 +418,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     
     recomms_text = ""
     additions = [k for k,v in results.items() if v<4]
-    if not additions: additions = [min(results)]
+    if not additions: additions = [k for k,v in results.items() if v<=min(results.values())]
     if len(additions)==1:
         cat = list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(additions[0])]
         recomms_text = Settings.get_locale(f"results_weak_{cat}")
