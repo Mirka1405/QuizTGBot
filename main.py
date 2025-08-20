@@ -7,10 +7,12 @@ Skill Assessment Bot with industry selection, role selection, and questionnaire
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 import io
+import os
 import random
 import re
-from subprocess import PIPE
+from subprocess import DEVNULL, PIPE, Popen
 import asyncio
+import subprocess
 from telegram.error import NetworkError
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -654,6 +656,15 @@ async def put_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Pong!")
 
+async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Safe update command that avoids multiple instances"""
+    if not await check_admin(update):
+        return
+
+    await update.message.reply_text("🔄 Starting update...")
+    
+    subprocess.run(["git", "pull"])
+    exit(0)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -693,6 +704,7 @@ def main() -> None:
     application.add_handler(CommandHandler("getfile", get_file))
     application.add_handler(CommandHandler("putfile", put_file))
     application.add_handler(CommandHandler("ping", ping))
+    application.add_handler(CommandHandler("update", update_command))
     
     # Add conversation handler for the test
     conv_handler = ConversationHandler(
