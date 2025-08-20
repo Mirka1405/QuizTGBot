@@ -704,6 +704,7 @@ def main() -> None:
     application.add_handler(CommandHandler("getfile", get_file))
     application.add_handler(CommandHandler("putfile", put_file))
     application.add_handler(CommandHandler("ping", ping))
+    application.add_handler(CommandHandler("pong", ping))
     application.add_handler(CommandHandler("update", update_command))
     
     # Add conversation handler for the test
