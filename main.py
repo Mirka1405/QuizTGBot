@@ -431,7 +431,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
                                    caption=result_text+recomms_text+sum_up_text,
                                    show_caption_above_media=True,
                                    reply_markup=ReplyKeyboardRemove(),
-                                   parse_mode='MarkdownV2')
+                                   parse_mode='HTML')
     
     return ConversationHandler.END
 
@@ -673,13 +673,6 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     exit(0)
 
 
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle errors gracefully"""
-    if isinstance(context.error, NetworkError):
-        print(f"Network error occurred: {context.error}")
-    else:
-        print(f"Unexpected error: {context.error}")
-
 def main() -> None:
     """Start the bot."""
     # Load environment and configuration
@@ -704,7 +697,6 @@ def main() -> None:
                                                             .pool_timeout(30)\
                                                             .build()
 
-    application.add_error_handler(error_handler)
     application.add_handler(CommandHandler("logs", get_logs))
     application.add_handler(CommandHandler("exec", exec_command))
     application.add_handler(CommandHandler("getfile", get_file))
