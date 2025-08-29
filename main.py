@@ -450,8 +450,10 @@ async def generate_recommendations(test: Test) -> str:
     """Generate recommendation text based on test results"""
     role_data = Settings.roles[test.role]
     average = round(test.average, 2)
-    
-    recs = Settings.get_locale("email_score").format(average, round(100-average*10,2))
+    if average==10:
+        recs = Settings.get_locale("email_perfect")
+    else:
+        recs = Settings.get_locale("email_score").format(average, round(100-average*10,2))
     free_emoji = Settings.config["free_rec_emoji"]
     paid_emoji = Settings.config["paid_rec_emoji"]
     
