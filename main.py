@@ -414,18 +414,24 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             .format(Settings.config["consultation_number"])
     
     recomms_text = ""
-    additions = [k for k,v in results.items() if v<4]
-    if not additions: additions = [k for k,v in results.items() if v<=min(results.values())]
-    if len(additions)==1:
-        cat = list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(additions[0])]
-        recomms_text = Settings.get_locale(f"results_weak_{cat}")
+    result_text = None
+    if min(results.values())<10:
+        additions = [k for k,v in results.items() if v<4]
+        if not additions: additions = [k for k,v in results.items() if v<=min(results.values())]
+        if len(additions)==1:
+            cat = list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(additions[0])]
+            recomms_text = Settings.get_locale(f"results_weak_{cat}")
+        else:
+            recomms_text+="\n"+";\n".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
+        recomms_text+="."
+        result_text = Settings.get_locale("results").format(average,round(100-average*10),loss_text)
     else:
-        recomms_text+="\n"+";\n".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
-    recomms_text+="."
+        result_text = Settings.get_locale("results_perfect")
     await update.message.reply_photo(photo=img_buffer, 
-                                   caption=Settings.get_locale("results").format(average,round(100-average*10),loss_text)+recomms_text+sum_up_text,
+                                   caption=result_text+recomms_text+sum_up_text,
                                    show_caption_above_media=True,
-                                   reply_markup=ReplyKeyboardRemove())
+                                   reply_markup=ReplyKeyboardRemove(),
+                                   parse_mode='MarkdownV2')
     
     return ConversationHandler.END
 
