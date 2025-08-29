@@ -496,7 +496,6 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not res:
         await update.message.reply_text(Settings.get_locale("error_notest"))
         return ConversationHandler.END
-    await update.message.reply_text(repr(res))
     if res[0]==10:
         await update.message.reply_text(Settings.get_locale("error_perfect").format(Settings.config["consultation_number"]))
         return ConversationHandler.END
