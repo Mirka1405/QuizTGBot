@@ -400,7 +400,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
                                f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
     
-    sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None else "\n"
+    sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None or average<10 else "\n"
     loss_text = ""
     if test.person_cost and test.person_cost.isdigit():
         person_cost = float(test.person_cost)
@@ -461,6 +461,7 @@ async def generate_recommendations(test: Test) -> str:
     for cat_id, score in test.score.items():
         category = role_data.questions[cat_id]
         category_score = score
+        if category_score==10: continue
         results[category.display_name] = category_score
         if category_score > 7.5:
             recs += Settings.get_locale("aspect_percentage").format(cat_id, category_score) + \
@@ -485,12 +486,16 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     cursor = Settings.db.conn.cursor()
     cursor.execute("""
-        SELECT 1 FROM results 
+        SELECT average_ti FROM results 
         WHERE telegram_username = ?
     """, (user_id,))
     
-    if not cursor.fetchone():
+    res = cursor.fetchone()
+    if not res:
         await update.message.reply_text(Settings.get_locale("error_notest"))
+        return ConversationHandler.END
+    if res==10:
+        await update.message.reply_text(Settings.get_locale("error_perfect").format(Settings.config["consultation_number"]))
         return ConversationHandler.END
     
     await update.message.reply_text(Settings.get_locale("request_email"))
