@@ -488,13 +488,15 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
     cursor.execute("""
         SELECT average_ti FROM results 
         WHERE telegram_username = ?
+        ORDER BY id DESC
+        LIMIT 1
     """, (user_id,))
     
     res = cursor.fetchone()
     if not res:
         await update.message.reply_text(Settings.get_locale("error_notest"))
         return ConversationHandler.END
-    if res==10:
+    if res[0]==10:
         await update.message.reply_text(Settings.get_locale("error_perfect").format(Settings.config["consultation_number"]))
         return ConversationHandler.END
     
