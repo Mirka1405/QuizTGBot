@@ -11,7 +11,8 @@
     "consultation_number":"@irsamo",
     "recommendations_file":"recommendation.json",
     "free_rec_emoji":"✅",
-    "paid_rec_emoji":"💸",
+    "paid_rec_emoji":"💰",
     "email_template":"email_template.html",
-    "admins_file":"admins.txt"
+    "admins_file":"admins.txt",
+    "link": "LUDI-cons.ru"
 }

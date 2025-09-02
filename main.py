@@ -13,6 +13,7 @@ import re
 from subprocess import DEVNULL, PIPE, Popen
 import asyncio
 import subprocess
+import sys
 from telegram.error import NetworkError
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -65,7 +66,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_msg = Settings.get_locale("start_reply").format(
         Settings.get_locale("start_company_detected") if company_id else Settings.get_locale("start_recommendations_nocompany")
     )
-    
+    context.user_data = {}
     if company_id:
         context.user_data['company_id'] = company_id
     
@@ -81,6 +82,7 @@ async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     invite_link = f"https://t.me/{context.bot.username}?start={company_id}"
     await update.message.reply_text(Settings.get_locale("company_created").format(invite_link,company_id),reply_markup=ReplyKeyboardMarkup([["/starttest"]], resize_keyboard=True))
+    context.user_data = {}
     context.user_data['company_id'] = company_id
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -289,7 +291,7 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     return await ask_next_question(update, context)
 
 def wrap_email_html(content):
-    return Settings.html.replace("CONTENT",content).replace("NUMBER",Settings.config["consultation_number"])
+    return Settings.html.replace("CONTENT",content).replace("NUMBER",Settings.config["consultation_number"]).replace("LINK",Settings.config["link"])
 async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None):
     """Send the collected answers via email"""
     if not 'email' in Settings.config:
@@ -463,16 +465,18 @@ async def generate_recommendations(test: Test) -> str:
         category_score = score
         if category_score==10: continue
         results[category.display_name] = category_score
-        if category_score > 7.5:
-            recs += Settings.get_locale("aspect_percentage").format(cat_id, category_score) + \
+        if category_score == 10:
+            recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + "<br>" + Settings.get_locale("category_perfect")
+        elif category_score > 7.5:
+            recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + \
                     "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["free"]) + "<br>" + \
                     "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["paid"]) + "<br><br>"
         elif category_score > 5:
-            recs += Settings.get_locale("aspect_percentage").format(cat_id, category_score) + \
+            recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + \
                     f"{free_emoji}{random.choice(Settings.recommendations['weak'][cat_id]['free'])}<br>" + \
                     "<br>".join(f"{paid_emoji}{i}" for i in random.sample(Settings.recommendations["weak"][cat_id]["paid"], 2)) + "<br><br>"
         else:
-            recs += Settings.get_locale("aspect_percentage").format(cat_id, category_score) + \
+            recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + \
                     "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "<br>" + \
                     "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
     
@@ -681,7 +685,10 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subprocess.run(["git", "pull"])
     exit(0)
 
-
+async def send_launch_message(application):
+    if not Settings.main_admin: return
+    startup_msg = f"Bot started successfully!\n• Environment: {sys.platform}"
+    await application.bot.send_message(chat_id=Settings.main_admin, text=startup_msg)
 def main() -> None:
     """Start the bot."""
     # Load environment and configuration
@@ -713,6 +720,8 @@ def main() -> None:
     application.add_handler(CommandHandler("ping", ping))
     application.add_handler(CommandHandler("pong", ping))
     application.add_handler(CommandHandler("update", update_command))
+
+    asyncio.run(send_launch_message(application))
     
     # Add conversation handler for the test
     conv_handler = ConversationHandler(
