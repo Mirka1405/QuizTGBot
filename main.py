@@ -707,8 +707,7 @@ def main() -> None:
     Settings.load_admins(Settings.config.get("admins_file","admins.txt"))
 
     # Create application
-    application = Application.builder().token(getenv("TOKEN")).concurrent_updates(False)\
-                                                            .read_timeout(30)\
+    application = Application.builder().token(getenv("TOKEN")).read_timeout(30)\
                                                             .write_timeout(30)\
                                                             .connect_timeout(30)\
                                                             .pool_timeout(30)\
@@ -722,7 +721,7 @@ def main() -> None:
     application.add_handler(CommandHandler("pong", ping))
     application.add_handler(CommandHandler("update", update_command))
 
-    asyncio.run(send_launch_message(application))
+    # send_launch_message(application)
     
     # Add conversation handler for the test
     conv_handler = ConversationHandler(
