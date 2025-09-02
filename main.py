@@ -683,7 +683,7 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔄 Starting update...")
     
     subprocess.run(["git", "pull"])
-    exit(0)
+    exit(1)
 
 async def send_launch_message(application):
     if not Settings.main_admin: return
