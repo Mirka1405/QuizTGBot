@@ -686,6 +686,7 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     exit(1)
 
 async def send_launch_message(application):
+    return
     if not Settings.main_admin: return
     startup_msg = f"Bot started successfully!\n• Environment: {sys.platform}"
     await application.bot.send_message(chat_id=Settings.main_admin, text=startup_msg)
