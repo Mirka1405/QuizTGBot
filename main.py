@@ -682,14 +682,11 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🔄 Starting update...")
     
-    subprocess.run(["git", "pull"])
     exit(1)
 
 async def send_launch_message(application):
-    return
-    if not Settings.main_admin: return
     startup_msg = f"Bot started successfully!\n• Environment: {sys.platform}"
-    await application.bot.send_message(chat_id=Settings.main_admin, text=startup_msg)
+    await application.bot.send_message(chat_id=Settings.config["main_admin_id"], text=startup_msg)
 def main() -> None:
     """Start the bot."""
     # Load environment and configuration

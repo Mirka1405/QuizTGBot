@@ -14,5 +14,6 @@
     "paid_rec_emoji":"💰",
     "email_template":"email_template.html",
     "admins_file":"admins.txt",
-    "link": "LUDI-cons.ru"
+    "link": "LUDI-cons.ru",
+    "main_admin_id":2057962335
 }
