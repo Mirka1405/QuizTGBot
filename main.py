@@ -751,6 +751,7 @@ def main() -> None:
     application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
     application.add_handler(conv_handler)
     
+    asyncio.run(send_launch_message(application))
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
