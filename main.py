@@ -66,7 +66,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_msg = Settings.get_locale("start_reply").format(
         Settings.get_locale("start_company_detected") if company_id else Settings.get_locale("start_recommendations_nocompany")
     )
-    context.user_data = {}
+    context.user_data.clear()
     if company_id:
         context.user_data['company_id'] = company_id
     
@@ -82,7 +82,7 @@ async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     invite_link = f"https://t.me/{context.bot.username}?start={company_id}"
     await update.message.reply_text(Settings.get_locale("company_created").format(invite_link,company_id),reply_markup=ReplyKeyboardMarkup([["/starttest"]], resize_keyboard=True))
-    context.user_data = {}
+    context.user_data.clear()
     context.user_data['company_id'] = company_id
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
