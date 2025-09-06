@@ -708,6 +708,7 @@ def main() -> None:
                                                             .write_timeout(30)\
                                                             .connect_timeout(30)\
                                                             .pool_timeout(30)\
+                                                            .post_init(send_launch_message)\
                                                             .build()
 
     application.add_handler(CommandHandler("logs", get_logs))
@@ -750,8 +751,6 @@ def main() -> None:
     # application.add_handler(CommandHandler("myresults", my_results)) # TODO: paywall this
     application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
     application.add_handler(conv_handler)
-    
-    asyncio.run(send_launch_message(application))
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
