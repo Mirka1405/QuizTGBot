@@ -615,6 +615,60 @@ async def generate_recommendations(test: Test) -> str:
     image = generate_spidergram(list(results.keys()), list(results.values()),
                                f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
     return recs,image
+async def generate_recommendations_group(test: Test) -> str:
+    """Generate recommendation text based on test results"""
+    role_data = Settings.roles[test.role]
+    average = round(test.average, 2)
+    if average==10:
+        recs = Settings.get_locale("email_perfect")
+    else:
+        recs = Settings.get_locale("email_score").format(average, round(100-average*10,2))
+    free_emoji = Settings.config["free_rec_emoji"]
+    paid_emoji = Settings.config["paid_rec_emoji"]
+    
+    results = {}
+    for cat_id, score in test.score.items():
+        category = role_data.questions[cat_id]
+        category_score = score
+        results[category.display_name] = category_score
+        if category_score==10: continue
+        if category_score == 10:
+            recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + "<br>" + Settings.get_locale("category_perfect")
+        elif category_score > 7.5:
+            recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + \
+                    "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["free"]) + "<br>" + \
+                    "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["strong"][cat_id]["paid"]) + "<br><br>"
+        elif category_score > 5:
+            recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + \
+                    f"{free_emoji}{random.choice(Settings.recommendations['weak'][cat_id]['free'])}<br>" + \
+                    "<br>".join(f"{paid_emoji}{i}" for i in random.sample(Settings.recommendations["weak"][cat_id]["paid"], 2)) + "<br><br>"
+        else:
+            recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + \
+                    "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "<br>" + \
+                    "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
+    cursor = Settings.db.conn.cursor()
+
+    cursor.execute("""
+        SELECT c.id, c.name, AVG(na.answer)
+        FROM results r
+        JOIN num_answers na ON r.id = na.id
+        JOIN num_questions nq ON na.question_id = nq.id
+        JOIN categories c ON nq.category_id = c.id
+        WHERE r.role = 'Manager'
+        GROUP BY c.id, c.name
+        ORDER BY c.id
+    """)
+
+    manager_results = {}
+    for row in cursor.fetchall():
+        category_id, category_name, avg_score = row
+        manager_results[category_name] = avg_score
+    if len(list(manager_results.keys()))==0:
+        image = generate_spidergram(list(results.keys()), list(results.values()),
+                            f"Индекс максимума команды")
+    else: image = generate_double_spidergram(list(results.keys()), list(results.values()), list(manager_results.values()),
+                               f"Индекс максимума команды.")
+    return recs,image
 
 async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the email conversation - just verify test exists"""
@@ -811,7 +865,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
         test.score[category_name] = sum(scores) / len(scores) if scores else 0
 
     # Generate recommendations
-    recs, image = await generate_recommendations(test)
+    recs, image = await generate_recommendations_group(test,)
     
     # Add group-specific information to the email
     group_info = Settings.get_locale("email_group_info").format(participant_count)
@@ -819,7 +873,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Send email
     await send_results_by_email(recs, email, image)
-    await update.message.reply_text(Settings.get_locale("email_sent_group"))
+    await update.message.reply_text(Settings.get_locale("email_sent"))
 
     # Clean up
     context.user_data.pop('group_email_data', None)
