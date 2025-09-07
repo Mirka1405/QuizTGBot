@@ -436,7 +436,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         else:
             recomms_text+="\n"+";\n".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
         recomms_text+="."
-        result_text = Settings.get_locale("results").format(average,round(100-average_unrounded*10),loss_text)
+        result_text = Settings.get_locale("results").format(average,round(100-average_unrounded*10,1),loss_text)
     else:
         result_text = Settings.get_locale("results_perfect")
     await update.message.reply_photo(photo=img_buffer, 
