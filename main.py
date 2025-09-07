@@ -7,14 +7,11 @@ Skill Assessment Bot with industry selection, role selection, and questionnaire
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 import io
-import os
 import random
 import re
-from subprocess import DEVNULL, PIPE, Popen
+from subprocess import PIPE
 import asyncio
-import subprocess
 import sys
-from telegram.error import NetworkError
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -291,7 +288,19 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     return await ask_next_question(update, context)
 
 def wrap_email_html(content):
-    return Settings.html.replace("CONTENT",content).replace("NUMBER",Settings.config["consultation_number"]).replace("LINK",Settings.config["link"])
+    replacements = {
+        "CONTENT": content,
+        "NUMBER": Settings.config["consultation_tg"],
+        "LINK": Settings.config["link"],
+        "MAIL": Settings.config["owner_mail"],
+        "EMOJIFREE": Settings.config["free_rec_emoji"],
+        "EMOJIPAID": Settings.config["paid_rec_emoji"]
+    }
+
+    result = Settings.html
+    for placeholder, value in replacements.items():
+        result = result.replace(placeholder, str(value))
+    return result
 async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None):
     """Send the collected answers via email"""
     if not 'email' in Settings.config:
@@ -393,7 +402,8 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     username = update.effective_user.username or update.effective_user.full_name
     Settings.db.save_results(test, username, company_id)
 
-    average = round(test.average,2)
+    average_unrounded = test.average
+    average = round(average_unrounded,2)
     
     for cat_id, score in test.score.items():
         category = role_data.questions[cat_id]
@@ -402,18 +412,18 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
                                f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
     
-    sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None or average<10 else "\n"
+    sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None or average_unrounded<10 else "\n"
     loss_text = ""
     if test.person_cost and test.person_cost.isdigit():
         person_cost = float(test.person_cost)
-        loss = (1 - average/10) * person_cost
+        loss = (1 - average_unrounded/10) * person_cost
         total_loss = loss * test.team_size
         loss_text=Settings.get_locale("results_losscalc").format(
-                round(100-average*10), round(total_loss,2)
+                round(100-average_unrounded*10), round(total_loss,2)
             )
         
     sum_up_text+="\n"+Settings.get_locale("results_score_sum_up_group" if context.user_data.get("company_id") else "results_score_sum_up_sole")\
-            .format(Settings.config["consultation_number"])
+            .format("@"+Settings.config["consultation_tg"])
     
     recomms_text = ""
     result_text = None
@@ -426,7 +436,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         else:
             recomms_text+="\n"+";\n".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
         recomms_text+="."
-        result_text = Settings.get_locale("results").format(average,round(100-average*10),loss_text)
+        result_text = Settings.get_locale("results").format(average,round(100-average_unrounded*10),loss_text)
     else:
         result_text = Settings.get_locale("results_perfect")
     await update.message.reply_photo(photo=img_buffer, 
@@ -501,7 +511,7 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(Settings.get_locale("error_notest"))
         return ConversationHandler.END
     if res[0]==10:
-        await update.message.reply_text(Settings.get_locale("error_perfect").format(Settings.config["consultation_number"]))
+        await update.message.reply_text(Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
         return ConversationHandler.END
     
     await update.message.reply_text(Settings.get_locale("request_email"))

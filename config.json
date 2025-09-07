@@ -8,12 +8,13 @@
         "sender_email": "teamintelligenceindex@yandex.ru"
     },
     "database":"database.db",
-    "consultation_number":"@irsamo",
+    "consultation_tg":"irsamo",
     "recommendations_file":"recommendation.json",
     "free_rec_emoji":"✅",
     "paid_rec_emoji":"💰",
     "email_template":"email_template.html",
     "admins_file":"admins.txt",
     "link": "LUDI-cons.ru",
-    "main_admin_id":2057962335
+    "main_admin_id":2057962335,
+    "owner_mail":"ira@ludi-cons.ru"
 }

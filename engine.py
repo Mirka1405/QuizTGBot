@@ -194,8 +194,8 @@ class DatabaseManager:
             industry TEXT NOT NULL,
             team_size INTEGER,
             person_cost INTEGER,
-            average_ti INTEGER NOT NULL,
-            estimated_losses INTEGER,
+            average_ti FLOAT NOT NULL,
+            estimated_losses FLOAT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         
@@ -246,7 +246,7 @@ class DatabaseManager:
         
         estimated_losses = None
         if test.person_cost is not None:
-            estimated_losses = (1 - sum(test.score.values())/len(test.answers)/10 * float(test.person_cost)*test.team_size)
+            estimated_losses = ((1-test.average/10) * float(test.person_cost)*test.team_size)
         
         # Insert main result
         cursor.execute("""
@@ -260,7 +260,7 @@ class DatabaseManager:
             test.industry,
             test.team_size,
             int(test.person_cost) if test.person_cost and test.person_cost.isdigit() else None,
-            round(test.average),
+            test.average,
             estimated_losses
         ))
         result_id = cursor.lastrowid
