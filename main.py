@@ -469,7 +469,6 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     aggregated_test.open_answers = all_open_answers
     aggregated_test.force_average_by_score = True  # Use average of category averages
     
-    await update.message.reply_text(repr(average_scores))
     # # Mark companies as inactive
     # cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
     # Settings.db.conn.commit()
@@ -511,10 +510,6 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     else:
         cursor = Settings.db.conn.cursor()
 
-        cursor.execute("SELECT id, name FROM categories ORDER BY id")
-        categories = {row[0]: row[1] for row in cursor.fetchall()}
-
-        # Get manager's average results for all categories
         cursor.execute("""
             SELECT c.id, c.name, AVG(na.answer)
             FROM results r
@@ -531,10 +526,9 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             category_id, category_name, avg_score = row
             manager_results[category_name] = avg_score
 
-        # Now pass the manager results to the function
         img_buffer = generate_double_spidergram(
             list(results.keys()), 
-            list(results.values()), 
+            list(group.score.values()), 
             list(manager_results.values()),
             f"Индекс максимума команды"
         )
