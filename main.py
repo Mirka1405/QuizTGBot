@@ -548,7 +548,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     result_text = None
     if test.role=="Manager" or not context.user_data.get("company_id"):
         sum_up_text = "\n"+Settings.get_locale("results_score_sum_up").format("/getgrouprecommendations" if group else "/getrecommendations") if company_id is None or average_unrounded<10 else "\n"
-        if test.person_cost and test.person_cost.isdigit():
+        if test.person_cost and (isinstance(test.person_cost,(float,int)) or test.person_cost.isdigit()):
             person_cost = float(test.person_cost)
             loss = (1 - average_unrounded/10) * person_cost
             total_loss = loss * test.team_size
