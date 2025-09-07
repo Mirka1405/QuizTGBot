@@ -542,9 +542,6 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             loss_text=Settings.get_locale("results_losscalc").format(
                     round(100-average_unrounded*10), round(total_loss)
                 )
-            
-        sum_up_text+="\n"+Settings.get_locale("results_score_sum_up_group" if context.user_data.get("company_id") else "results_score_sum_up_sole")\
-                .format("@"+Settings.config["consultation_tg"])
     
         if min(results.values())<10:
             additions = [k for k,v in results.items() if v<10]
