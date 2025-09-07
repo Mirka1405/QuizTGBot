@@ -395,7 +395,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     results = cursor.fetchall()
     
     if not results:
-        await update.message.reply_text("error")
+        await update.message.reply_text(Settings.get_locale("error_group_notest"))
         return
     
     # Initialize aggregation variables
