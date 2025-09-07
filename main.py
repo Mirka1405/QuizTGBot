@@ -492,7 +492,8 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
 
     company_id = context.user_data.get('company_id')
     username = update.effective_user.username or update.effective_user.full_name
-    Settings.db.save_results(test, username, company_id)
+    if not group:
+        Settings.db.save_results(test, username, company_id)
 
     average_unrounded = test.average
     average = round(average_unrounded,2)
@@ -577,7 +578,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
                                     parse_mode='HTML')
     else:
         await update.message.reply_photo(photo=img_buffer,
-                                         caption=Settings.get_locale("results_employee").format(average,Settings.config["consultation_tg"]))
+                                         caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]))
     
     return ConversationHandler.END
 

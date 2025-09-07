@@ -246,7 +246,7 @@ class DatabaseManager:
         
         estimated_losses = None
         if test.person_cost is not None:
-            estimated_losses = ((1-test.average/10) * float(test.person_cost)*test.team_size)
+            estimated_losses = ((1-test.average/10) * float(test.person_cost)*float(test.team_size))
         
         # Insert main result
         cursor.execute("""
