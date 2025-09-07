@@ -371,8 +371,7 @@ async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(Settings.get_locale("error_generating_report"))
             raise e
 
-async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mark all of this user's tests as finished and aggregate results"""
+async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     cursor = Settings.db.conn.cursor()
 
@@ -396,7 +395,7 @@ async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     results = cursor.fetchall()
     
     if not results:
-        await update.message.reply_text("No test results found for these companies.")
+        await update.message.reply_text("error")
         return
     
     # Initialize aggregation variables
@@ -470,9 +469,9 @@ async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     aggregated_test.open_answers = all_open_answers
     aggregated_test.force_average_by_score = True  # Use average of category averages
     
-    # Mark companies as inactive
-    cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
-    Settings.db.conn.commit()
+    # # Mark companies as inactive
+    # cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
+    # Settings.db.conn.commit()
 
     Settings.db.save_results(aggregated_test,update.effective_user.id,company_ids[-1])
     
@@ -852,7 +851,8 @@ def main() -> None:
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("grouptest", group_test))
     # application.add_handler(CommandHandler("myresults", my_results)) # TODO: paywall this
-    application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
+    # application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
+    application.add_handler(CommandHandler("grouptestresults", group_test_results))
     application.add_handler(conv_handler)
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
