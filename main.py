@@ -469,6 +469,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     aggregated_test.open_answers = all_open_answers
     aggregated_test.force_average_by_score = True  # Use average of category averages
     
+    await update.message.reply_text(repr(average_scores))
     # # Mark companies as inactive
     # cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
     # Settings.db.conn.commit()
@@ -529,13 +530,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         for row in cursor.fetchall():
             category_id, category_name, avg_score = row
             manager_results[category_name] = avg_score
-            await update.message.reply_text(repr((category_name,avg_score)))
 
-        # # Ensure we have all categories (fill missing ones with 0)
-        # for category_id, category_name in categories.items():
-        #     if category_name not in manager_results.keys():
-        #         manager_results[category_name] = 0
-        await update.message.reply_text(repr(manager_results))
         # Now pass the manager results to the function
         img_buffer = generate_double_spidergram(
             list(results.keys()), 
