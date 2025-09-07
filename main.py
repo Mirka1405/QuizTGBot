@@ -447,12 +447,12 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
             all_open_answers[question]+=answer+"\n"
         
         # Get first non-null values for industry, team_size, person_cost
-        if industry is None and result[3]:  # industry field
-            industry = result[3]
-        if team_size is None and result[4]:  # team_size field
-            team_size = result[4]
-        if person_cost is None and result[5]:  # person_cost field
-            person_cost = result[5]
+        if industry is None and result[4]:  # industry field
+            industry = result[4]
+        if team_size is None and result[5]:  # team_size field
+            team_size = result[5]
+        if person_cost is None and result[6]:  # person_cost field
+            person_cost = result[6]
     
     # Calculate average scores per category
     average_scores = {}
