@@ -33,7 +33,7 @@ from email.mime.text import MIMEText
 
 from engine import *
 
-INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL = range(7)
+INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL, GETTING_GROUP_EMAIL = range(8)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
@@ -520,7 +520,9 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         for row in cursor.fetchall():
             category_id, category_name, avg_score = row
             manager_results[category_name] = avg_score
-
+        if len(list(manager_results.keys()))==0:
+            img_buffer = generate_spidergram(list(results.keys()), list(group.score.values()),
+                               f"Индекс максимума команды")
         img_buffer = generate_double_spidergram(
             list(results.keys()), 
             list(group.score.values()), 
@@ -701,6 +703,128 @@ async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await update.message.reply_text(Settings.get_locale("email_sent"))
 
     return ConversationHandler.END
+async def get_group_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Start the email conversation for group results - verify test exists"""
+    user_id = update.effective_user.username or update.effective_user.full_name
+    
+    cursor = Settings.db.conn.cursor()
+    
+    # Get the latest company created by this user
+    cursor.execute("""
+        SELECT id FROM companies 
+        WHERE created_by = ? 
+        ORDER BY id DESC 
+        LIMIT 1
+    """, (update.effective_user.id,))
+    
+    company = cursor.fetchone()
+    if not company:
+        await update.message.reply_text(Settings.get_locale("error_nogrouptest"))
+        return ConversationHandler.END
+    
+    company_id = company[0]
+    
+    # Count number of people who took the test in this company
+    cursor.execute("""
+        SELECT COUNT(*) FROM results 
+        WHERE company_id = ?
+    """, (company_id,))
+    
+    participant_count = cursor.fetchone()[0]
+    
+    if participant_count == 0:
+        await update.message.reply_text(Settings.get_locale("error_group_notest"))
+        return ConversationHandler.END
+    
+    # Get average score for the group
+    cursor.execute("""
+        SELECT AVG(average_ti) FROM results 
+        WHERE company_id = ?
+    """, (company_id,))
+    
+    avg_score = cursor.fetchone()[0] or 0
+    
+    if avg_score == 10:
+        await update.message.reply_text(Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
+        return ConversationHandler.END
+    
+    await update.message.reply_text(Settings.get_locale("request_email"))
+    
+    # Store company_id and participant_count in context for email generation
+    context.user_data['group_email_data'] = {
+        'company_id': company_id,
+        'participant_count': participant_count
+    }
+    
+    return GETTING_GROUP_EMAIL
+
+async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Generate and send group recommendations email"""
+    if not is_valid_email(update.message.text):
+        await update.message.reply_text(Settings.get_locale("bad_email_address"))
+        return GETTING_GROUP_EMAIL
+
+    email = update.message.text
+    group_data = context.user_data.get('group_email_data', {})
+    company_id = group_data.get('company_id')
+    participant_count = group_data.get('participant_count', 0)
+    
+    if not company_id:
+        await update.message.reply_text(Settings.get_locale("error_nogrouptest"))
+        return ConversationHandler.END
+
+    cursor = Settings.db.conn.cursor()
+    await update.message.reply_text(Settings.get_locale("email_generating"))
+    
+    # Get aggregated results for the company (similar to stop_group_test logic)
+    cursor.execute("""
+        SELECT r.role, r.industry, r.team_size, r.person_cost, 
+               c.name, AVG(na.answer)
+        FROM results r
+        JOIN num_answers na ON r.id = na.id
+        JOIN num_questions nq ON na.question_id = nq.id
+        JOIN categories c ON nq.category_id = c.id
+        WHERE r.company_id = ?
+        GROUP BY c.id, c.name, r.role, r.industry, r.team_size, r.person_cost
+        ORDER BY c.id
+    """, (company_id,))
+
+    # Calculate category averages across all participants
+    category_scores = {}
+    for row in cursor.fetchall():
+        role, industry, team_size, person_cost, category_name, avg_score = row
+        if category_name not in category_scores:
+            category_scores[category_name] = []
+        category_scores[category_name].append(avg_score)
+
+    # Create aggregated test object
+    test = Test(update.effective_user.id)
+    test.role = "Manager"
+    test.industry = industry  # Will be from the last result, but we need better aggregation
+    test.team_size = team_size
+    test.person_cost = person_cost
+    test.score = {}
+    test.force_average_by_score = True
+
+    # Calculate final category averages
+    for category_name, scores in category_scores.items():
+        test.score[category_name] = sum(scores) / len(scores) if scores else 0
+
+    # Generate recommendations
+    recs, image = await generate_recommendations(test)
+    
+    # Add group-specific information to the email
+    group_info = Settings.get_locale("email_group_info").format(participant_count)
+    recs = group_info + "\n<br>" + recs
+
+    # Send email
+    await send_results_by_email(recs, email, image)
+    await update.message.reply_text(Settings.get_locale("email_sent_group"))
+
+    # Clean up
+    context.user_data.pop('group_email_data', None)
+    
+    return ConversationHandler.END
 async def check_admin(update: Update) -> bool:
     """Check if user is admin"""
     username = update.effective_user.username
@@ -869,6 +993,9 @@ def main() -> None:
             ],
             GETTING_EMAIL: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email)
+            ],
+            GETTING_GROUP_EMAIL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_group_email)
             ]
         },
         fallbacks=[CommandHandler("cancel", cancel_test)],
