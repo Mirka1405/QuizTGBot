@@ -57,10 +57,10 @@ def generate_double_spidergram(categories,values1,values2,title):
     # Create figure
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
     # Plot data
-    ax.plot(angles, values2, color='blue', linewidth=2, linestyle='solid',label='Сотрудники')
-    ax.fill(angles, values2, color='blue', alpha=0.25)
-    ax.plot(angles, values1, color='red', linewidth=2, linestyle='solid',label="Руководитель")
-    ax.fill(angles, values1, color='red', alpha=0.25)
+    ax.plot(angles, values1, color='blue', linewidth=2, linestyle='solid',label='Сотрудники')
+    ax.fill(angles, values1, color='blue', alpha=0.25)
+    ax.plot(angles, values2, color='red', linewidth=2, linestyle='solid',label="Руководитель")
+    ax.fill(angles, values2, color='red', alpha=0.25)
     ax.legend()
     
     # Customize axes
@@ -69,7 +69,7 @@ def generate_double_spidergram(categories,values1,values2,title):
     ax.set_thetagrids(np.degrees(angles[:-1]), labels=categories)
     
     # Set y-axis
-    max_val = max(*values1,*values2)
+    max_val = max(values1+values2)
     ax.set_ylim(0, max_val * 1.1)
     ax.set_yticks(np.linspace(0, max_val, 5))
     ax.grid(True)
