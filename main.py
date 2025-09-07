@@ -540,20 +540,16 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             loss = (1 - average_unrounded/10) * person_cost
             total_loss = loss * float(test.team_size)
             loss_text=Settings.get_locale("results_losscalc").format(
-                    round(100-average_unrounded*10), round(total_loss,2)
+                    round(100-average_unrounded*10), round(total_loss)
                 )
             
         sum_up_text+="\n"+Settings.get_locale("results_score_sum_up_group" if context.user_data.get("company_id") else "results_score_sum_up_sole")\
                 .format("@"+Settings.config["consultation_tg"])
     
         if min(results.values())<10:
-            additions = [k for k,v in results.items() if v<4]
+            additions = [k for k,v in results.items() if v<10]
             if not additions: additions = [k for k,v in results.items() if v<=min(results.values())]
-            if len(additions)==1:
-                cat = list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(additions[0])]
-                recomms_text = Settings.get_locale(f"results_weak_{cat}")
-            else:
-                recomms_text+="\n"+";\n• ".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
+            recomms_text+="\n• "+";\n• ".join(additions)
             recomms_text+="."
             result_text = Settings.get_locale("results").format(average,round(100-average_unrounded*10,1),loss_text)
         else:
@@ -565,7 +561,8 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
                                     parse_mode='HTML')
     else:
         await update.message.reply_photo(photo=img_buffer,
-                                         caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]))
+                                         caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
+                                         reply_markup=ReplyKeyboardRemove())
     
     return ConversationHandler.END
 
