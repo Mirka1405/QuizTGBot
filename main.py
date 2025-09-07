@@ -977,7 +977,7 @@ def main() -> None:
     
     # Add conversation handler for the test
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("starttest", start_test),CommandHandler("getrecommendations", get_recommendations)],
+        entry_points=[CommandHandler("starttest", start_test),CommandHandler("getrecommendations", get_recommendations),CommandHandler("getgrouprecommendations", get_group_recommendations)],
         states={
             INDUSTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_industry)],
             ROLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_role)],
