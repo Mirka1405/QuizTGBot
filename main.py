@@ -533,7 +533,6 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         result_text = Settings.get_locale("results_perfect")
     await update.message.reply_photo(photo=img_buffer, 
                                    caption=result_text+recomms_text+sum_up_text,
-                                   show_caption_above_media=True,
                                    reply_markup=ReplyKeyboardRemove(),
                                    parse_mode='HTML')
     
