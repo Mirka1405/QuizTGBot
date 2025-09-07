@@ -526,7 +526,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             cat = list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(additions[0])]
             recomms_text = Settings.get_locale(f"results_weak_{cat}")
         else:
-            recomms_text+="\n"+";\n".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
+            recomms_text+="\n"+";\n• ".join(Settings.get_locale(f"results_weak_{list(Settings.categories_locales.keys())[list(Settings.categories_locales.values()).index(i)]}") for i in additions)
         recomms_text+="."
         result_text = Settings.get_locale("results").format(average,round(100-average_unrounded*10,1),loss_text)
     else:
