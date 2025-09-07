@@ -551,7 +551,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         if test.person_cost and (isinstance(test.person_cost,(float,int)) or test.person_cost.isdigit()):
             person_cost = float(test.person_cost)
             loss = (1 - average_unrounded/10) * person_cost
-            total_loss = loss * test.team_size
+            total_loss = loss * float(test.team_size)
             loss_text=Settings.get_locale("results_losscalc").format(
                     round(100-average_unrounded*10), round(total_loss,2)
                 )
