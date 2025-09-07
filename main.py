@@ -529,6 +529,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         for row in cursor.fetchall():
             category_id, category_name, avg_score = row
             manager_results[category_name] = avg_score
+            await update.message.reply_text(repr((category_name,avg_score)))
 
         # # Ensure we have all categories (fill missing ones with 0)
         # for category_id, category_name in categories.items():
