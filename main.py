@@ -534,7 +534,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         for category_id, category_name in categories.items():
             if category_name not in manager_results:
                 manager_results[category_name] = 0
-
+        print(manager_results)
         # Now pass the manager results to the function
         img_buffer = generate_double_spidergram(
             list(results.keys()), 

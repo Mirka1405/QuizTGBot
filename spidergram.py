@@ -47,28 +47,26 @@ def generate_double_spidergram(categories,values1,values2,title):
     num_vars = len(categories)
     
     # Compute angles for each axis
-    angles1 = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
-    angles2 = copy(angles1)
+    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
     
     # Complete the loop
     values1 += values1[:1]
     values2 += values2[:1]
-    angles1 += angles1[:1]
-    angles2 += angles2[:1]
+    angles += angles[:1]
     
     # Create figure
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
     # Plot data
-    ax.plot(angles2, values2, color='blue', linewidth=2, linestyle='solid',label='Сотрудники')
-    ax.fill(angles2, values2, color='blue', alpha=0.25)
-    ax.plot(angles1, values1, color='red', linewidth=2, linestyle='solid',label="Руководитель")
-    ax.fill(angles1, values1, color='red', alpha=0.25)
+    ax.plot(angles, values2, color='blue', linewidth=2, linestyle='solid',label='Сотрудники')
+    ax.fill(angles, values2, color='blue', alpha=0.25)
+    ax.plot(angles, values1, color='red', linewidth=2, linestyle='solid',label="Руководитель")
+    ax.fill(angles, values1, color='red', alpha=0.25)
     ax.legend()
     
     # Customize axes
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
-    ax.set_thetagrids(np.degrees(angles1[:-1]), labels=categories)
+    ax.set_thetagrids(np.degrees(angles[:-1]), labels=categories)
     
     # Set y-axis
     max_val = max(*values1,*values2)
