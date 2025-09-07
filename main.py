@@ -473,8 +473,8 @@ async def generate_recommendations(test: Test) -> str:
     for cat_id, score in test.score.items():
         category = role_data.questions[cat_id]
         category_score = score
-        if category_score==10: continue
         results[category.display_name] = category_score
+        if category_score==10: continue
         if category_score == 10:
             recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + "<br>" + Settings.get_locale("category_perfect")
         elif category_score > 7.5:
