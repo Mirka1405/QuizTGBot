@@ -191,7 +191,7 @@ class DatabaseManager:
             telegram_username TEXT,
             company_id INTEGER REFERENCES companies(id),
             role TEXT NOT NULL,
-            industry TEXT NOT NULL,
+            industry TEXT,
             team_size INTEGER,
             person_cost INTEGER,
             average_ti FLOAT NOT NULL,
