@@ -26,7 +26,7 @@ from telegram.ext import (
 from dotenv import load_dotenv
 from os import getenv
 
-from spidergram import generate_spidergram
+from spidergram import *
 
 import smtplib
 from email.mime.text import MIMEText
@@ -473,7 +473,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
     # Settings.db.conn.commit()
 
-    Settings.db.save_results(aggregated_test,update.effective_user.id,company_ids[-1])
+    # Settings.db.save_results(aggregated_test,update.effective_user.id,company_ids[-1])
     
     await finish_test(update, context, aggregated_test)
 
@@ -501,14 +501,19 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         category = role_data.questions[cat_id]
         results[category.display_name] = score / len(category.questions) if len(category.questions) > 0 else 0
     
-    img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
+    img_buffer = None
+    
+    if not group:
+        img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
                                f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
+    else:
+        img_buffer = generate_double_spidergram(list(results.keys()), list(results.values()), list(group.score.values()),f"Индекс максимума команды")
     sum_up_text=""
     loss_text=""
     recomms_text = ""
     result_text = None
-    if test.role=="Manager":
-        sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None or average_unrounded<10 else "\n"
+    if test.role=="Manager" or not context.user_data.get("company_id"):
+        sum_up_text = "\n"+Settings.get_locale("results_score_sum_up").format("/getgrouprecommendations" if group else "/getrecommendations") if company_id is None or average_unrounded<10 else "\n"
         if test.person_cost and test.person_cost.isdigit():
             person_cost = float(test.person_cost)
             loss = (1 - average_unrounded/10) * person_cost
@@ -532,7 +537,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             result_text = Settings.get_locale("results").format(average,round(100-average_unrounded*10,1),loss_text)
         else:
             result_text = Settings.get_locale("results_perfect")
-    if test.role=="Manager":
+    if test.role=="Manager" or not context.user_data.get("company_id"):
         await update.message.reply_photo(photo=img_buffer, 
                                     caption=result_text+recomms_text+sum_up_text,
                                     reply_markup=ReplyKeyboardRemove(),
