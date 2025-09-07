@@ -410,6 +410,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     categories = {row[0]: row[1] for row in cursor.fetchall()}
     
     # Process each result
+    await update.message.reply_text(Settings.get_locale("group_test_results_amount").format(len(results)))
     for result in results:
         result_id = result[0]
         
@@ -468,12 +469,6 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     aggregated_test.score = average_scores
     aggregated_test.open_answers = all_open_answers
     aggregated_test.force_average_by_score = True  # Use average of category averages
-    
-    # # Mark companies as inactive
-    # cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
-    # Settings.db.conn.commit()
-
-    # Settings.db.save_results(aggregated_test,update.effective_user.id,company_ids[-1])
     
     await finish_test(update, context, aggregated_test)
 
