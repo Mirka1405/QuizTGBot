@@ -256,7 +256,7 @@ class DatabaseManager:
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             telegram_username, company_id,
-            Settings.roles[test.role].display_name,
+            test.role,
             test.industry,
             test.team_size,
             int(test.person_cost) if test.person_cost and test.person_cost.isdigit() else None,

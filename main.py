@@ -507,7 +507,40 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
                                f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
     else:
-        img_buffer = generate_double_spidergram(list(results.keys()), list(results.values()), list(group.score.values()),f"Индекс максимума команды")
+        cursor = Settings.db.conn.cursor()
+
+        cursor.execute("SELECT id, name FROM categories ORDER BY id")
+        categories = {row[0]: row[1] for row in cursor.fetchall()}
+
+        # Get manager's average results for all categories
+        cursor.execute("""
+            SELECT c.id, c.name, AVG(na.answer)
+            FROM results r
+            JOIN num_answers na ON r.id = na.id
+            JOIN num_questions nq ON na.question_id = nq.id
+            JOIN categories c ON nq.category_id = c.id
+            WHERE r.role = 'Manager'
+            GROUP BY c.id, c.name
+            ORDER BY c.id
+        """)
+
+        manager_results = {}
+        for row in cursor.fetchall():
+            category_id, category_name, avg_score = row
+            manager_results[category_name] = avg_score
+
+        # Ensure we have all categories (fill missing ones with 0)
+        for category_id, category_name in categories.items():
+            if category_name not in manager_results:
+                manager_results[category_name] = 0
+
+        # Now pass the manager results to the function
+        img_buffer = generate_double_spidergram(
+            list(results.keys()), 
+            list(results.values()), 
+            list(manager_results.values()),
+            f"Индекс максимума команды"
+        )
     sum_up_text=""
     loss_text=""
     recomms_text = ""
