@@ -372,20 +372,117 @@ async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise e
 
 async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mark all of this user's tests as finished"""
+    """Mark all of this user's tests as finished and aggregate results"""
     user_id = update.effective_user.id
     cursor = Settings.db.conn.cursor()
 
+    # Get all active companies created by this user
+    cursor.execute("SELECT id FROM companies WHERE created_by = ? AND is_active = 1", (user_id,))
+    companies = cursor.fetchall()
+    
+    if not companies:
+        await update.message.reply_text(Settings.get_locale("error_notest"))
+        return
+    
+    company_ids = [company[0] for company in companies]
+    
+    # Get all results for these companies
+    placeholders = ','.join('?' for _ in company_ids)
+    cursor.execute(f"""
+        SELECT * FROM results 
+        WHERE company_id IN ({placeholders})
+    """, company_ids)
+    
+    results = cursor.fetchall()
+    
+    if not results:
+        await update.message.reply_text("No test results found for these companies.")
+        return
+    
+    # Initialize aggregation variables
+    all_scores = {}
+    all_open_answers = {}
+    industry = None
+    team_size = None
+    person_cost = None
+    
+    # Get category names for mapping
+    cursor.execute("SELECT id, name FROM categories")
+    categories = {row[0]: row[1] for row in cursor.fetchall()}
+    
+    # Process each result
+    for result in results:
+        result_id = result[0]
+        
+        # Get numerical answers for this result
+        cursor.execute("""
+            SELECT nq.category_id, na.answer 
+            FROM num_answers na
+            JOIN num_questions nq ON na.question_id = nq.id
+            WHERE na.id = ?
+        """, (result_id,))
+        
+        num_answers = cursor.fetchall()
+        
+        # Aggregate scores by category
+        for category_id, answer in num_answers:
+            category_name = categories.get(category_id, f"Category_{category_id}")
+            if category_name not in all_scores:
+                all_scores[category_name] = []
+            all_scores[category_name].append(answer)
+        
+        # Get open answers for this result
+        cursor.execute("""
+            SELECT sq.text, sa.answer 
+            FROM str_answers sa
+            JOIN str_questions sq ON sa.question_id = sq.id
+            WHERE sa.id = ?
+        """, (result_id,))
+        
+        str_answers = cursor.fetchall()
+        
+        # Aggregate open answers
+        for question, answer in str_answers:
+            if question not in all_open_answers:
+                all_open_answers[question] = ""
+            all_open_answers[question]+=answer+"\n"
+        
+        # Get first non-null values for industry, team_size, person_cost
+        if industry is None and result[3]:  # industry field
+            industry = result[3]
+        if team_size is None and result[4]:  # team_size field
+            team_size = result[4]
+        if person_cost is None and result[5]:  # person_cost field
+            person_cost = result[5]
+    
+    # Calculate average scores per category
+    average_scores = {}
+    for category, scores in all_scores.items():
+        average_scores[category] = sum(scores) / len(scores)
+    
+    # Create aggregated test result
+    aggregated_test = Test(user_id)
+    aggregated_test.industry = industry or None
+    aggregated_test.team_size = team_size or None
+    aggregated_test.person_cost = person_cost or None
+    aggregated_test.role = "Manager"
+    aggregated_test.score = average_scores
+    aggregated_test.open_answers = all_open_answers
+    aggregated_test.force_average_by_score = True  # Use average of category averages
+    
+    # Mark companies as inactive
     cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
-    cursor = Settings.db.conn.commit()
-    await update.message.reply_text(
-        Settings.get_locale("company_deleted"),
-        reply_markup=ReplyKeyboardRemove()
-    )
-async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    Settings.db.conn.commit()
+
+    Settings.db.save_results(aggregated_test,update.effective_user.id,company_ids[-1])
+    
+    await finish_test(update, context, aggregated_test)
+
+async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:Test|None=None) -> int:
     """Calculate and display results"""
     user_id = update.effective_user.id
-    test = Settings.ongoing_tests.pop(user_id, None)
+    if group: test = group
+    else: test = Settings.ongoing_tests.pop(user_id, None)
     
     if not test:
         await update.message.reply_text(Settings.get_locale("error"))
