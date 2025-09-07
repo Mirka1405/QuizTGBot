@@ -114,7 +114,7 @@ async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     
     # Check if this is a group test and industry already exists
     company_id = context.user_data.get('company_id')
-    if company_id and role_id=="Manager":
+    if company_id and role_id!="Manager":
         return await receive_industry(update, context, True)
     
     # Create keyboard with industries
