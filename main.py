@@ -868,7 +868,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
     recs, image = await generate_recommendations_group(test,)
     
     # Add group-specific information to the email
-    group_info = Settings.get_locale("email_group_info").format(participant_count)
+    group_info = Settings.get_locale("group_test_results_amount").format(participant_count)
     recs = group_info + "\n<br>" + recs
 
     # Send email
