@@ -66,7 +66,7 @@ def generate_double_spidergram(categories,values1,values2,title):
     # Customize axes
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
-    ax.set_thetagrids(np.degrees(angles[:-1]), labels=categories)
+    ax.set_thetagrids(np.degrees(angles[:-1]), labels=categories, fontsize=16)
     
     # Set y-axis
     max_val = max(values1+values2)

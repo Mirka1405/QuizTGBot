@@ -562,7 +562,17 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
                                          reply_markup=ReplyKeyboardRemove())
     
     return ConversationHandler.END
+async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mark all of this user's tests as finished"""
+    user_id = update.effective_user.id
+    cursor = Settings.db.conn.cursor()
 
+    cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
+    cursor = Settings.db.conn.commit()
+    await update.message.reply_text(
+        Settings.get_locale("company_deleted"),
+        reply_markup=ReplyKeyboardRemove()
+    )
 async def cancel_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel the ongoing test"""
     user_id = update.effective_user.id
@@ -1054,7 +1064,7 @@ def main() -> None:
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("grouptest", group_test))
     # application.add_handler(CommandHandler("myresults", my_results)) # TODO: paywall this
-    # application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
+    application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
     application.add_handler(CommandHandler("grouptestresults", group_test_results))
     application.add_handler(conv_handler)
     # Run the bot
