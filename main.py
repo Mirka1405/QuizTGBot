@@ -994,7 +994,6 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🔄 Starting update...")
     
-    await shutdown(context.application)
     exit(1)
 
 async def send_launch_message(application):
