@@ -579,7 +579,8 @@ async def cancel_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     if user_id in Settings.ongoing_tests:
         del Settings.ongoing_tests[user_id]
     
-    await update.message.reply_text(
+    await context.bot.send_message(
+        update.effective_user.id,
         Settings.get_locale("cancel"),
         reply_markup=ReplyKeyboardRemove()
     )
@@ -1032,7 +1033,8 @@ def main() -> None:
     Settings.load_admins(Settings.config.get("admins_file","admins.txt"))
 
     # Create application
-    application = Application.builder().token(getenv("TOKEN")).read_timeout(30)\
+    application = Application.builder().token(getenv("TOKEN")).concurrent_updates(False)\
+                                                            .read_timeout(30)\
                                                             .write_timeout(30)\
                                                             .connect_timeout(30)\
                                                             .pool_timeout(30)\
