@@ -994,11 +994,28 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🔄 Starting update...")
     
+    await shutdown(context.application)
     exit(1)
 
 async def send_launch_message(application):
     startup_msg = f"Bot started successfully!\n• Environment: {sys.platform}"
     await application.bot.send_message(chat_id=Settings.config["main_admin_id"], text=startup_msg)
+
+async def shutdown(application: Application):
+    """Gracefully shutdown the bot"""
+    try:
+        admin_id = Settings.config["main_admin_id"]
+        await application.bot.send_message(
+            chat_id=admin_id,
+            text="🔴 Bot is shutting down"
+        )
+    except Exception as e:
+        print(f"Could not send shutdown message: {e}")
+    
+    await application.stop()
+    await application.shutdown()
+    exit(1)
+
 def main() -> None:
     """Start the bot."""
     # Load environment and configuration
