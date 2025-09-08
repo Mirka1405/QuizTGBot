@@ -727,7 +727,7 @@ async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     result_id, role, industry, team_size, person_cost, average_ti = result
     
     test = Test(update.effective_user.id)
-    test.role = list(Settings.role_locales.keys())[list(Settings.role_locales.values()).index(role)]
+    test.role = role
     test.industry = industry
     test.team_size = team_size
     test.person_cost = person_cost
