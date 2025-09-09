@@ -58,6 +58,7 @@ class Settings:
     admins: set[str] = {}
 
     button_callbacks: dict = {}
+    skip_locales: set = set()
 
     @classmethod
     def load_admins(cls,filename:str="admins.txt"):

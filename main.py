@@ -33,15 +33,20 @@ from email.mime.text import MIMEText
 
 from engine import *
 
-INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL, GETTING_GROUP_EMAIL = range(8)
-async def handle_pretty_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+NO, INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL, GETTING_GROUP_EMAIL = range(9)
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = Settings.button_callbacks.get(update.message.text)
-    if not val: return
-    await val(update,context)
+    if val: return await val(update,context)
+    states = {INDUSTRY:receive_industry,ROLE:receive_role,TEAM_SIZE:receive_team_size,PERSON_COST:receive_person_cost,QUESTION:receive_answer,OPEN_QUESTION:receive_open_answer,GETTING_EMAIL:receive_email,GETTING_GROUP_EMAIL:receive_group_email}
+    state = context.user_data.get("state")
+    if not state: return
+    value = await states[state](update,context)
+    if value: context.user_data["state"] = value
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
     company_id = None
     starttesttext = Settings.get_locale("button_starttest")
+    Settings.skip_locales.add(Settings.get_locale("button_skip"))
     if starttesttext not in Settings.button_callbacks.keys(): Settings.button_callbacks[starttesttext] = start_test
     kb = [starttesttext]
     
@@ -87,7 +92,7 @@ async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     company_id = Settings.db.create_company(user_id)
     
     invite_link = f"https://t.me/{context.bot.username}?start={company_id}"
-    await update.message.reply_text(Settings.get_locale("company_created").format(invite_link,company_id),reply_markup=ReplyKeyboardMarkup([["/starttest"]], resize_keyboard=True))
+    await update.message.reply_text(Settings.get_locale("company_created").format(invite_link,company_id),reply_markup=ReplyKeyboardMarkup([[Settings.get_locale("button_starttest")]], resize_keyboard=True))
     context.user_data.clear()
     context.user_data['company_id'] = company_id
 
@@ -101,7 +106,7 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         Settings.get_locale("role_select"),
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
-    return ROLE
+    context.user_data["state"] = ROLE
 
 async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store role and ask for industry (if first in group) or skip (if in group)"""
@@ -284,7 +289,7 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(Settings.get_locale("error_noactivetest"))
         return ConversationHandler.END
     
-    if update.message.text != "/skip":
+    if update.message.text not in Settings.skip_locales:
         # Store the answer with the question text as key
         question = context.user_data["last_question"]
         test.open_answers[question] = update.message.text
@@ -705,7 +710,7 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
     
     await update.message.reply_text(Settings.get_locale("request_email"))
-    return GETTING_EMAIL
+    context.user_data["state"]=GETTING_EMAIL
 def is_valid_email(email):
     if not email or len(email) > 320: return False
     pattern = r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$"
@@ -824,7 +829,7 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
         'participant_count': participant_count
     }
     
-    return GETTING_GROUP_EMAIL
+    context.user_data["state"]=GETTING_GROUP_EMAIL
 
 async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Generate and send group recommendations email"""
@@ -1061,40 +1066,44 @@ def main() -> None:
     # send_launch_message(application)
     
     # Add conversation handler for the test
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("starttest", start_test),CommandHandler("getrecommendations", get_recommendations),CommandHandler("getgrouprecommendations", get_group_recommendations)],
-        states={
-            INDUSTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_industry)],
-            ROLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_role)],
-            TEAM_SIZE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_team_size)],
-            PERSON_COST: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_person_cost),
-                CommandHandler("skip", receive_person_cost)
-            ],
-            QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_answer)],
-            OPEN_QUESTION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_open_answer),
-                CommandHandler("skip", receive_open_answer)
-            ],
-            GETTING_EMAIL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email)
-            ],
-            GETTING_GROUP_EMAIL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_group_email)
-            ]
-        },
-        fallbacks=[CommandHandler("cancel", cancel_test)],
-    )
+    # conv_handler = ConversationHandler(
+    #     entry_points=[CommandHandler("starttest", start_test),CommandHandler("getrecommendations", get_recommendations),CommandHandler("getgrouprecommendations", get_group_recommendations)],
+    #     states={
+    #         INDUSTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_industry)],
+    #         ROLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_role)],
+    #         TEAM_SIZE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_team_size)],
+    #         PERSON_COST: [
+    #             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_person_cost),
+    #             CommandHandler("skip", receive_person_cost)
+    #         ],
+    #         QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_answer)],
+    #         OPEN_QUESTION: [
+    #             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_open_answer),
+    #             CommandHandler("skip", receive_open_answer)
+    #         ],
+    #         GETTING_EMAIL: [
+    #             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email)
+    #         ],
+    #         GETTING_GROUP_EMAIL: [
+    #             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_group_email)
+    #         ]
+    #     },
+    #     fallbacks=[CommandHandler("cancel", cancel_test)],
+    # )
     
-    # Register handlers
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    application.add_handler(CommandHandler("cancel", cancel_test))
+    application.add_handler(CommandHandler("starttest", start_test))
+    application.add_handler(CommandHandler("getrecommendations", get_recommendations))
+    application.add_handler(CommandHandler("getgrouprecommendations", get_group_recommendations))
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("grouptest", group_test))
     # application.add_handler(CommandHandler("myresults", my_results)) # TODO: paywall this
     application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
     application.add_handler(CommandHandler("grouptestresults", group_test_results))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_pretty_text))
-    application.add_handler(conv_handler)
+    # application.add_handler(conv_handler)
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
