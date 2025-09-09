@@ -74,7 +74,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         grouptesttext = Settings.get_locale("button_grouptest")
         if grouptesttext not in Settings.button_callbacks.keys(): Settings.button_callbacks[grouptesttext] = group_test
-        kb.append()
+        kb.append(grouptesttext)
     
     await update.message.reply_text(
         welcome_msg,
