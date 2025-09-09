@@ -571,7 +571,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     if test.role=="Manager" or not context.user_data.get("company_id"):
         await update.message.reply_photo(photo=img_buffer, 
                                     caption=result_text+recomms_text+sum_up_text,
-                                    reply_markup=ReplyKeyboardMarkup([[markup]]),
+                                    reply_markup=ReplyKeyboardMarkup([[markup]],resize_keyboard=True),
                                     parse_mode='HTML')
     else:
         await update.message.reply_photo(photo=img_buffer,
