@@ -192,7 +192,7 @@ async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # Ask for average person cost (optional)
     await update.message.reply_text(
         Settings.get_locale("person_cost_question"),
-        reply_markup=ReplyKeyboardMarkup([["/skip"]], resize_keyboard=True))
+        reply_markup=ReplyKeyboardMarkup([[Settings.get_locale("button_skip")]], resize_keyboard=True))
     return PERSON_COST
 
 async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -204,7 +204,7 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(Settings.get_locale("error_noactivetest"))
         return ConversationHandler.END
     
-    if update.message.text != "/skip":
+    if update.message.text not in Settings.skip_locales:
         test.person_cost = update.message.text
     
     # Prepare all questions
@@ -249,7 +249,7 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         context.user_data["last_question"] = question
         await update.message.reply_text(
             f"{question}\n\n{Settings.get_locale('open_question_hint')}",
-            reply_markup=ReplyKeyboardMarkup([["/skip"]], resize_keyboard=True))
+            reply_markup=ReplyKeyboardMarkup([[Settings.get_locale("button_skip")]], resize_keyboard=True))
         return OPEN_QUESTION
     
     return await finish_test(update, context)
