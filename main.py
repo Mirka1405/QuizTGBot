@@ -71,7 +71,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         welcome_msg,
-        reply_markup=InlineKeyboardMarkup([kb], resize_keyboard=True)
+        reply_markup=InlineKeyboardMarkup([kb])
     )
 
 async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
