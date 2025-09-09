@@ -995,7 +995,7 @@ async def put_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         await update.message.reply_text(f"Error: {str(e)}")
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Pong!")
+    await update.message.reply_text(repr(context.user_data))
 
 async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Safe update command that avoids multiple instances"""
