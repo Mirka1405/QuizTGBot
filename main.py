@@ -13,14 +13,14 @@ from subprocess import PIPE
 import asyncio
 import sys
 
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
     MessageHandler,
     filters,
-    ConversationHandler
+    ConversationHandler,
 )
 
 from dotenv import load_dotenv
@@ -38,7 +38,7 @@ INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL, 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
     company_id = None
-    kb = ["/starttest"]
+    kb = [InlineKeyboardButton(text=Settings.get_locale("button_starttest"),callback_data="/starttest")]
     
     if context.args:
         if not context.args[0].isdigit():
@@ -66,10 +66,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     if company_id:
         context.user_data['company_id'] = company_id
+    else:
+        kb+=[InlineKeyboardButton(text=Settings.get_locale("button_grouptest"),callback_data="/grouptest")]
     
     await update.message.reply_text(
         welcome_msg,
-        reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
+        reply_markup=InlineKeyboardMarkup([kb], resize_keyboard=True)
     )
 
 async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -560,7 +562,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         await update.message.reply_photo(photo=img_buffer,
                                          caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
                                          reply_markup=ReplyKeyboardRemove())
-    
+    context.user_data.clear()
     return ConversationHandler.END
 async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mark all of this user's tests as finished"""
