@@ -13,7 +13,7 @@ from subprocess import PIPE
 import asyncio
 import sys
 
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -34,11 +34,16 @@ from email.mime.text import MIMEText
 from engine import *
 
 INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL, GETTING_GROUP_EMAIL = range(8)
-
+async def handle_pretty_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    val = Settings.button_callbacks.get(update.message.text)
+    if not val: return
+    await val(update,context)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
     company_id = None
-    kb = [InlineKeyboardButton(text=Settings.get_locale("button_starttest"),callback_data="/starttest")]
+    starttesttext = Settings.get_locale("button_starttest")
+    if starttesttext not in Settings.button_callbacks.keys(): Settings.button_callbacks[starttesttext] = start_test
+    kb = [starttesttext]
     
     if context.args:
         if not context.args[0].isdigit():
@@ -67,11 +72,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if company_id:
         context.user_data['company_id'] = company_id
     else:
-        kb+=[InlineKeyboardButton(text=Settings.get_locale("button_grouptest"),callback_data="/grouptest")]
+        grouptesttext = Settings.get_locale("button_grouptest")
+        if grouptesttext not in Settings.button_callbacks.keys(): Settings.button_callbacks[grouptesttext] = group_test
+        kb.append()
     
     await update.message.reply_text(
         welcome_msg,
-        reply_markup=InlineKeyboardMarkup([kb])
+        reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
     )
 
 async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1086,6 +1093,7 @@ def main() -> None:
     # application.add_handler(CommandHandler("myresults", my_results)) # TODO: paywall this
     application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
     application.add_handler(CommandHandler("grouptestresults", group_test_results))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_pretty_text))
     application.add_handler(conv_handler)
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)

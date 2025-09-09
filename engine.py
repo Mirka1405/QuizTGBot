@@ -57,6 +57,8 @@ class Settings:
     role_locales: dict[str,str] = {}
     admins: set[str] = {}
 
+    button_callbacks: dict[str,function]
+
     @classmethod
     def load_admins(cls,filename:str="admins.txt"):
         with open(filename,"r",encoding="utf-8") as f:
