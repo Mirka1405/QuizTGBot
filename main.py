@@ -13,7 +13,7 @@ from subprocess import PIPE
 import asyncio
 import sys
 
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -73,9 +73,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
     
-    welcome_msg = Settings.get_locale("start_reply").format(
-        Settings.get_locale("start_company_detected") if company_id else Settings.get_locale("start_recommendations_nocompany")
-    )
+    welcome_msg = Settings.get_locale("start_reply")
     context.user_data.clear()
     if company_id:
         context.user_data['company_id'] = company_id
@@ -84,7 +82,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         welcome_msg,
-        reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True),
+        parse_mode="HTML"
     )
 
 async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -572,7 +571,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     if test.role=="Manager" or not context.user_data.get("company_id"):
         await update.message.reply_photo(photo=img_buffer, 
                                     caption=result_text+recomms_text+sum_up_text,
-                                    reply_markup=ReplyKeyboardMarkup(markup),
+                                    reply_markup=ReplyKeyboardMarkup([[markup]]),
                                     parse_mode='HTML')
     else:
         await update.message.reply_photo(photo=img_buffer,
