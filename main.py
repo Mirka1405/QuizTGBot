@@ -548,8 +548,10 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     loss_text=""
     recomms_text = ""
     result_text = None
+    markup = Settings.get_locale("button_getrecommendations")
     if test.role=="Manager" or not context.user_data.get("company_id"):
         sum_up_text = "\n"+Settings.get_locale("results_score_sum_up").format("/getgrouprecommendations" if group else "/getrecommendations") if company_id is None or average_unrounded<10 else "\n"
+        if group: markup = Settings.get_locale("button_getgrouprecommendations")
         if test.person_cost and (isinstance(test.person_cost,(float,int)) or test.person_cost.isdigit()):
             person_cost = float(test.person_cost)
             loss = (1 - average_unrounded/10) * person_cost
@@ -566,10 +568,11 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             result_text = Settings.get_locale("results").format(average,round(100-average_unrounded*10,1),loss_text)
         else:
             result_text = Settings.get_locale("results_perfect")
+
     if test.role=="Manager" or not context.user_data.get("company_id"):
         await update.message.reply_photo(photo=img_buffer, 
                                     caption=result_text+recomms_text+sum_up_text,
-                                    reply_markup=ReplyKeyboardRemove(),
+                                    reply_markup=markup,
                                     parse_mode='HTML')
     else:
         await update.message.reply_photo(photo=img_buffer,
