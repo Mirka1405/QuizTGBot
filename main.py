@@ -46,8 +46,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
     company_id = None
     starttesttext = Settings.get_locale("button_starttest")
+    grouptesttext = Settings.get_locale("button_grouptest")
     Settings.skip_locales.add(Settings.get_locale("button_skip"))
-    if starttesttext not in Settings.button_callbacks.keys(): Settings.button_callbacks[starttesttext] = start_test
+
+    Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,"getgrouprecommendations":get_group_recommendations})
+
     kb = [starttesttext]
     
     if context.args:
@@ -77,8 +80,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if company_id:
         context.user_data['company_id'] = company_id
     else:
-        grouptesttext = Settings.get_locale("button_grouptest")
-        if grouptesttext not in Settings.button_callbacks.keys(): Settings.button_callbacks[grouptesttext] = group_test
         kb.append(grouptesttext)
     
     await update.message.reply_text(
@@ -177,7 +178,7 @@ async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     test = Settings.ongoing_tests.get(user_id)
     
     if not test:
-        await update.message.reply_text(Settings.get_locale("error_noactivetest"))
+        await update.message.reply_text(Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return ConversationHandler.END
     
     try:
@@ -201,7 +202,7 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
     test = Settings.ongoing_tests.get(user_id)
     
     if not test:
-        await update.message.reply_text(Settings.get_locale("error_noactivetest"))
+        await update.message.reply_text(Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return ConversationHandler.END
     
     if update.message.text not in Settings.skip_locales:
@@ -259,7 +260,7 @@ async def receive_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     test = Settings.ongoing_tests.get(user_id)
     
     if not test:
-        await update.message.reply_text(Settings.get_locale("error_noactivetest"))
+        await update.message.reply_text(Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return ConversationHandler.END
     
     try:
@@ -286,7 +287,7 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     test = Settings.ongoing_tests.get(user_id)
     
     if not test:
-        await update.message.reply_text(Settings.get_locale("error_noactivetest"))
+        await update.message.reply_text(Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return ConversationHandler.END
     
     if update.message.text not in Settings.skip_locales:

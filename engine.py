@@ -149,7 +149,12 @@ class Settings:
         for user_id, test in list(cls.ongoing_tests.items()):
             if now - test.last_active > 3600:
                 del Settings.ongoing_tests[user_id]
-    
+
+    @classmethod
+    def add_button_locales(cls,buttons:dict,locale:str="ru_RU"):
+        for k in buttons:
+            if k in cls.button_callbacks.keys(): return
+            cls.button_callbacks[k] = cls.get_locale("button_"+buttons[k],locale)
 class DatabaseManager:
     def __init__(self, db_path: str = "quiz_results.db"):
         self.conn = sqlite3.connect(db_path,timeout=30)
