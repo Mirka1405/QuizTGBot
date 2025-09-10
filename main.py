@@ -41,7 +41,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, res
     if val: return await val(update,context)
     states = {INDUSTRY:receive_industry,ROLE:receive_role,TEAM_SIZE:receive_team_size,PERSON_COST:receive_person_cost,QUESTION:receive_answer,OPEN_QUESTION:receive_open_answer,GETTING_EMAIL:receive_email,GETTING_GROUP_EMAIL:receive_group_email}
     state = context.user_data.get("state")
-    if not state or state>=STATEAMOUNT: return
+    if not state or state>=STATEAMOUNT or state==NO: return
     value = await states[state](update,context)
     if value: context.user_data["state"] = value
 async def handle_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -609,7 +609,7 @@ async def cancel_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         Settings.get_locale("cancel"),
         reply_markup=ReplyKeyboardRemove()
     )
-    return ConversationHandler.END
+    context.user_data["state"] = NO
 async def generate_recommendations(test: Test) -> str:
     """Generate recommendation text based on test results"""
     role_data = Settings.roles[test.role]
