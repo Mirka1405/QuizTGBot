@@ -13,7 +13,7 @@ from subprocess import PIPE
 import asyncio
 import sys
 
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -32,16 +32,21 @@ import smtplib
 from email.mime.text import MIMEText
 
 from engine import *
-
-NO, INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL, GETTING_GROUP_EMAIL = range(9)
+STATEAMOUNT = 9
+NO, INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL, GETTING_GROUP_EMAIL = range(STATEAMOUNT)
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = Settings.button_callbacks.get(update.message.text)
     if val: return await val(update,context)
     states = {INDUSTRY:receive_industry,ROLE:receive_role,TEAM_SIZE:receive_team_size,PERSON_COST:receive_person_cost,QUESTION:receive_answer,OPEN_QUESTION:receive_open_answer,GETTING_EMAIL:receive_email,GETTING_GROUP_EMAIL:receive_group_email}
     state = context.user_data.get("state")
-    if not state: return
+    if not state or state>=STATEAMOUNT: return
     value = await states[state](update,context)
     if value: context.user_data["state"] = value
+async def handle_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query: return
+    update.message = update.callback_query.message
+    await handle_message(update,context)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
     company_id = None
@@ -51,7 +56,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,"getgrouprecommendations":get_group_recommendations})
 
-    kb = [starttesttext]
+    kb = [InlineKeyboardButton(starttesttext,callback_data="starttest")]
     
     if context.args:
         if not context.args[0].isdigit():
@@ -78,11 +83,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if company_id:
         context.user_data['company_id'] = company_id
     else:
-        kb.append(grouptesttext)
+        kb.append(InlineKeyboardButton(grouptesttext,callback_data="grouptest"))
     
     await update.message.reply_text(
         welcome_msg,
-        reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True),
+        reply_markup=InlineKeyboardMarkup([kb]),
         parse_mode="HTML"
     )
 
