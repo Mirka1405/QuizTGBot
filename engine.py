@@ -154,8 +154,9 @@ class Settings:
     def add_button_locales(cls,buttons:dict,locale:str="ru_RU"):
         for k in buttons:
             cls.button_callbacks[k] = buttons[k]
-            if k in cls.button_callbacks.keys(): return
-            cls.button_callbacks[cls.get_locale("button_"+k,locale)] = buttons[k]
+            loc = cls.get_locale("button_"+k,locale)
+            if loc in cls.button_callbacks.keys(): return
+            cls.button_callbacks[loc] = buttons[k]
 class DatabaseManager:
     def __init__(self, db_path: str = "quiz_results.db"):
         self.conn = sqlite3.connect(db_path,timeout=30)
