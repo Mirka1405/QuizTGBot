@@ -261,7 +261,7 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         context.user_data["last_question"] = question
         await update.message.reply_text(
             f"{question}\n\n{Settings.get_locale('open_question_hint')}",
-            reply_markup=ReplyKeyboardMarkup([[Settings.get_locale("button_skip")]], resize_keyboard=True))
+            reply_markup=ReplyKeyboardMarkup([[Settings.get_locale("button_skip")]], resize_keyboard=True, one_time_keyboard=True))
         return OPEN_QUESTION
     
     return await finish_test(update, context)
@@ -586,9 +586,8 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         if markup_group: buttons.append([InlineKeyboardButton(markup_group,callback_data="getgrouprecommendations")])
         message = await update.message.reply_photo(photo=img_buffer, 
                                     caption=result_text+recomms_text+sum_up_text,
-                                    reply_markup=ReplyKeyboardRemove(),
+                                    reply_markup=InlineKeyboardMarkup(buttons),
                                     parse_mode='HTML')
-        await message.edit_reply_markup(InlineKeyboardMarkup(buttons))
     else:
         await update.message.reply_photo(photo=img_buffer,
                                          caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
