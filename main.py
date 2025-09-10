@@ -58,7 +58,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,"getgrouprecommendations":get_group_recommendations})
 
-    kb = [InlineKeyboardButton(starttesttext,callback_data="starttest")]
+    kb = [[InlineKeyboardButton(starttesttext,callback_data="starttest")]]
     
     if context.args:
         if not context.args[0].isdigit():
@@ -85,11 +85,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if company_id:
         context.user_data['company_id'] = company_id
     else:
-        kb.append(InlineKeyboardButton(grouptesttext,callback_data="grouptest"))
+        kb.append([InlineKeyboardButton(grouptesttext,callback_data="grouptest")])
     
     await update.message.reply_text(
         welcome_msg,
-        reply_markup=InlineKeyboardMarkup([kb]),
+        reply_markup=InlineKeyboardMarkup(kb),
         parse_mode="HTML"
     )
 
