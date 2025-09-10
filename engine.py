@@ -153,6 +153,7 @@ class Settings:
     @classmethod
     def add_button_locales(cls,buttons:dict,locale:str="ru_RU"):
         for k in buttons:
+            cls.button_callbacks[k] = buttons[k]
             if k in cls.button_callbacks.keys(): return
             cls.button_callbacks[cls.get_locale("button_"+k,locale)] = buttons[k]
 class DatabaseManager:

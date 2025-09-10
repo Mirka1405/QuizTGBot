@@ -35,8 +35,8 @@ from email.mime.text import MIMEText
 from engine import *
 STATEAMOUNT = 9
 NO, INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL, GETTING_GROUP_EMAIL = range(STATEAMOUNT)
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    val = Settings.button_callbacks.get(update.message.text)
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, response_code: str | None = None):
+    val = Settings.button_callbacks.get(response_code if response_code else update.message.text)
     if val: return await val(update,context)
     states = {INDUSTRY:receive_industry,ROLE:receive_role,TEAM_SIZE:receive_team_size,PERSON_COST:receive_person_cost,QUESTION:receive_answer,OPEN_QUESTION:receive_open_answer,GETTING_EMAIL:receive_email,GETTING_GROUP_EMAIL:receive_group_email}
     state = context.user_data.get("state")
