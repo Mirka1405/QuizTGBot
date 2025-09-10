@@ -21,6 +21,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
     ConversationHandler,
+    CallbackQueryHandler
 )
 
 from dotenv import load_dotenv
@@ -44,6 +45,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if value: context.user_data["state"] = value
 async def handle_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
     if not query: return
     update.message = update.callback_query.message
     await handle_message(update,context)
@@ -1111,6 +1113,7 @@ def main() -> None:
     # application.add_handler(CommandHandler("myresults", my_results)) # TODO: paywall this
     application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
     application.add_handler(CommandHandler("grouptestresults", group_test_results))
+    application.add_handler(CallbackQueryHandler(handle_inline))
     # application.add_handler(conv_handler)
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
