@@ -100,7 +100,11 @@ async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     company_id = Settings.db.create_company(user_id)
     
     invite_link = f"https://t.me/{context.bot.username}?start={company_id}"
-    await update.message.reply_text(Settings.get_locale("company_created").format(invite_link,company_id),reply_markup=ReplyKeyboardMarkup([[Settings.get_locale("button_starttest")]], resize_keyboard=True))
+    await update.message.reply_text(
+        Settings.get_locale("company_created").format(invite_link,company_id),
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton(Settings.get_locale("button_starttest"),callback_data="starttest")]])
+            )
     context.user_data.clear()
     context.user_data['company_id'] = company_id
 
@@ -347,51 +351,51 @@ async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None):
     except Exception as e:
         print(f"Failed to send email: {e}")
 
-async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send company results as CSV file"""
-    user_id = update.effective_user.id
+# async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Send company results as CSV file"""
+#     user_id = update.effective_user.id
     
-    # Find companies created by this user
-    cursor = Settings.db.conn.cursor()
-    cursor.execute("SELECT id FROM companies WHERE created_by = ?", (user_id,))
-    companies = cursor.fetchall()
+#     # Find companies created by this user
+#     cursor = Settings.db.conn.cursor()
+#     cursor.execute("SELECT id FROM companies WHERE created_by = ?", (user_id,))
+#     companies = cursor.fetchall()
     
-    if not companies:
-        await update.message.reply_text(Settings.get_locale("company_results_nocompany"))
-        return
+#     if not companies:
+#         await update.message.reply_text(Settings.get_locale("company_results_nocompany"))
+#         return
     
-    for company in companies:
-        company_id = company[0]
+#     for company in companies:
+#         company_id = company[0]
         
-        try:
-            # Generate CSV content
-            csv_content = Settings.db.get_company_results_csv(company_id)
+#         try:
+#             # Generate CSV content
+#             csv_content = Settings.db.get_company_results_csv(company_id)
             
-            # Send as file
-            await update.message.reply_document(
-                document=io.BytesIO(csv_content.encode('utf-8')),
-                filename=f"company_{company_id}_results.csv",
-                caption=Settings.get_locale("company_results")
-            )
+#             # Send as file
+#             await update.message.reply_document(
+#                 document=io.BytesIO(csv_content.encode('utf-8')),
+#                 filename=f"company_{company_id}_results.csv",
+#                 caption=Settings.get_locale("company_results")
+#             )
             
-            # Send summary
-            cursor.execute("""
-            SELECT COUNT(*), AVG(average_ti) 
-            FROM results 
-            WHERE company_id = ?
-            """, (company_id,))
-            summary = cursor.fetchone()
+#             # Send summary
+#             cursor.execute("""
+#             SELECT COUNT(*), AVG(average_ti) 
+#             FROM results 
+#             WHERE company_id = ?
+#             """, (company_id,))
+#             summary = cursor.fetchone()
             
-            if summary and summary[0] > 0:
-                await update.message.reply_text(Settings.get_locale("company_results_full").format(
-                    company_id, summary[0], round(summary[1], 1)
-                ))
-            else:
-                await update.message.reply_text(Settings.get_locale("company_results_none"))
+#             if summary and summary[0] > 0:
+#                 await update.message.reply_text(Settings.get_locale("company_results_full").format(
+#                     company_id, summary[0], round(summary[1], 1)
+#                 ))
+#             else:
+#                 await update.message.reply_text(Settings.get_locale("company_results_none"))
                 
-        except Exception as e:
-            await update.message.reply_text(Settings.get_locale("error_generating_report"))
-            raise e
+#         except Exception as e:
+#             await update.message.reply_text(Settings.get_locale("error_generating_report"))
+#             raise e
 
 async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -556,9 +560,10 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     recomms_text = ""
     result_text = None
     markup = Settings.get_locale("button_getrecommendations")
+    markup_group = None
     if test.role=="Manager" or not context.user_data.get("company_id"):
-        sum_up_text = "\n"+Settings.get_locale("results_score_sum_up").format("/getgrouprecommendations" if group else "/getrecommendations") if company_id is None or average_unrounded<10 else "\n"
-        if group: markup = Settings.get_locale("button_getgrouprecommendations")
+        sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None or average_unrounded<10 else "\n"
+        if group: markup_group = Settings.get_locale("button_getgrouprecommendations")
         if test.person_cost and (isinstance(test.person_cost,(float,int)) or test.person_cost.isdigit()):
             person_cost = float(test.person_cost)
             loss = (1 - average_unrounded/10) * person_cost
@@ -577,10 +582,13 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             result_text = Settings.get_locale("results_perfect")
 
     if test.role=="Manager" or not context.user_data.get("company_id"):
-        await update.message.reply_photo(photo=img_buffer, 
+        buttons = [[InlineKeyboardButton(markup,callback_data="getrecommendations")]]
+        if markup_group: buttons.append([InlineKeyboardButton(markup_group,callback_data="getgrouprecommendations")])
+        message = await update.message.reply_photo(photo=img_buffer, 
                                     caption=result_text+recomms_text+sum_up_text,
-                                    reply_markup=ReplyKeyboardMarkup([[markup]],resize_keyboard=True),
+                                    reply_markup=ReplyKeyboardRemove(),
                                     parse_mode='HTML')
+        await message.edit_reply_markup(InlineKeyboardMarkup(buttons))
     else:
         await update.message.reply_photo(photo=img_buffer,
                                          caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
