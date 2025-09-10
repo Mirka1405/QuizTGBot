@@ -48,7 +48,7 @@ async def handle_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     if not query: return
     fake = Update(update.update_id,update.callback_query.message)
-    await handle_message(fake,context)
+    await handle_message(fake,context,query.data)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
     company_id = None
