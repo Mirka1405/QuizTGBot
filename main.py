@@ -189,12 +189,15 @@ async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     if not test:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
-        return ConversationHandler.END
+        return NO
     
     try:
         team_size = int(update.message.text)
         if team_size <= 0:
             raise ValueError
+        if team_size < 2 and context.user_data.get("company_id"):
+            await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_need_more_than_one"))
+            return TEAM_SIZE
         test.team_size = team_size
     except (ValueError, TypeError):
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_positive_number"))
@@ -213,7 +216,7 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if not test:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
-        return ConversationHandler.END
+        return NO
     
     if update.message.text not in Settings.skip_locales:
         test.person_cost = update.message.text
@@ -271,7 +274,7 @@ async def receive_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     if not test:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
-        return ConversationHandler.END
+        return NO
     
     try:
         rating = int(update.message.text)
@@ -298,7 +301,7 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if not test:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
-        return ConversationHandler.END
+        return NO
     
     if update.message.text not in Settings.skip_locales:
         # Store the answer with the question text as key
@@ -505,7 +508,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     
     if not test:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error"))
-        return ConversationHandler.END
+        return NO
     
     role_data = Settings.roles[test.role]
     results = {}
@@ -562,7 +565,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     markup_group = None
     if test.role=="Manager" or not context.user_data.get("company_id"):
         sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None or average_unrounded<10 else "\n"
-        if group: markup_group = Settings.get_locale("button_getgrouprecommendations")
+        if context.user_data.get("company_id"): markup_group = Settings.get_locale("button_getgrouprecommendations")
         if test.person_cost and (isinstance(test.person_cost,(float,int)) or test.person_cost.isdigit()):
             person_cost = float(test.person_cost)
             loss = (1 - average_unrounded/10) * person_cost
@@ -609,7 +612,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         #                                  caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
         #                                  reply_markup=ReplyKeyboardRemove())
     context.user_data.clear()
-    return ConversationHandler.END
+    return NO
 async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mark all of this user's tests as finished"""
     user_id = update.effective_user.id
@@ -739,10 +742,10 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
     print(user_id,res)
     if not res:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
-        return ConversationHandler.END
+        return NO
     if res[0]==10:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
-        return ConversationHandler.END
+        return NO
     
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("request_email"))
     context.user_data["state"]=GETTING_EMAIL
@@ -771,7 +774,7 @@ async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     
     if not result:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
-        return ConversationHandler.END
+        return NO
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_generating"))
     
     result_id, role, industry, team_size, person_cost, average_ti = result
@@ -810,7 +813,7 @@ async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await send_results_by_email(recs, update.message.text, image)
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_sent"))
 
-    return ConversationHandler.END
+    return NO
 async def get_group_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the email conversation for group results - verify test exists"""
     user_id = update.effective_user.username or update.effective_user.full_name
@@ -828,7 +831,7 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
     company = cursor.fetchone()
     if not company:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_nogrouptest"))
-        return ConversationHandler.END
+        return NO
     
     company_id = company[0]
     
@@ -842,7 +845,7 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
     
     if participant_count == 0:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_group_notest"))
-        return ConversationHandler.END
+        return NO
     
     # Get average score for the group
     cursor.execute("""
@@ -854,7 +857,7 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
     
     if avg_score == 10:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
-        return ConversationHandler.END
+        return NO
     
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("request_email"))
     
@@ -879,7 +882,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if not company_id:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_nogrouptest"))
-        return ConversationHandler.END
+        return NO
 
     cursor = Settings.db.conn.cursor()
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_generating"))
@@ -932,7 +935,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Clean up
     context.user_data.pop('group_email_data', None)
     
-    return ConversationHandler.END
+    return NO
 async def check_admin(update: Update) -> bool:
     """Check if user is admin"""
     username = update.effective_user.username
