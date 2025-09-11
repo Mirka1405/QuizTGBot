@@ -62,7 +62,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if context.args:
         if not context.args[0].isdigit():
-            await context.bot.send_message(context._chat_id,
+            await context.bot.send_message(update.effective_message.chat_id,
                 Settings.get_locale("error_companylinkstopped"),
                 reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
             )
@@ -74,7 +74,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor.execute("SELECT is_active FROM companies WHERE id = ?", (company_id,))
         result = cursor.fetchone()
         if not result or not result[0]:
-            await context.bot.send_message(context._chat_id,
+            await context.bot.send_message(update.effective_message.chat_id,
                 Settings.get_locale("error_companylinkstopped"),
                 reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
             )
@@ -87,7 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         kb.append([InlineKeyboardButton(grouptesttext,callback_data="grouptest")])
     
-    await context.bot.send_message(context._chat_id,
+    await context.bot.send_message(update.effective_message.chat_id,
         welcome_msg,
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode="HTML"
@@ -99,7 +99,7 @@ async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     company_id = Settings.db.create_company(user_id)
     
     invite_link = f"https://t.me/{context.bot.username}?start={company_id}"
-    await context.bot.send_message(context._chat_id,
+    await context.bot.send_message(update.effective_message.chat_id,
         Settings.get_locale("company_created").format(invite_link,company_id),
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(Settings.get_locale("button_starttest"),callback_data="starttest")]])
@@ -108,12 +108,12 @@ async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['company_id'] = company_id
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await context.bot.send_message(context._chat_id,Settings.get_locale("about"))
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("about"))
 
 async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the test by asking for role first"""
     keyboard = [[role.display_name] for role in Settings.roles.values()]
-    await context.bot.send_message(context._chat_id,
+    await context.bot.send_message(update.effective_message.chat_id,
         Settings.get_locale("role_select"),
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
@@ -131,7 +131,7 @@ async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             break
     
     if not role_id:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_wrongrole"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_wrongrole"))
         return ROLE
     
     # Store role in context
@@ -144,7 +144,7 @@ async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     
     # Create keyboard with industries
     keyboard = [[industry] for industry in Settings.industries]
-    await context.bot.send_message(context._chat_id,
+    await context.bot.send_message(update.effective_message.chat_id,
         Settings.get_locale("industry_select"),
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
@@ -168,7 +168,7 @@ async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE, p
     Settings.ongoing_tests[user_id] = test
     
     if not context.user_data.get("company_id") or role_id=="Manager":
-        await context.bot.send_message(context._chat_id,Settings.get_locale("team_size_question"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("team_size_question"))
         return TEAM_SIZE
     all_questions = []
     role_data = Settings.roles[test.role]
@@ -179,7 +179,7 @@ async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE, p
     test.questions_left = all_questions
     test.open_questions_left = role_data.open_questions.copy()
     
-    await context.bot.send_message(context._chat_id,Settings.get_locale("start_test_explanation"),
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("start_test_explanation"),
                                     reply_markup=ReplyKeyboardRemove())
     return await ask_next_question(update, context)
 async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -188,7 +188,7 @@ async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     test = Settings.ongoing_tests.get(user_id)
     
     if not test:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return ConversationHandler.END
     
     try:
@@ -197,11 +197,11 @@ async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             raise ValueError
         test.team_size = team_size
     except (ValueError, TypeError):
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_positive_number"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_positive_number"))
         return TEAM_SIZE
     
     # Ask for average person cost (optional)
-    await context.bot.send_message(context._chat_id,
+    await context.bot.send_message(update.effective_message.chat_id,
         Settings.get_locale("person_cost_question"),
         reply_markup=ReplyKeyboardMarkup([[Settings.get_locale("button_skip")]], resize_keyboard=True))
     return PERSON_COST
@@ -212,7 +212,7 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
     test = Settings.ongoing_tests.get(user_id)
     
     if not test:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return ConversationHandler.END
     
     if update.message.text not in Settings.skip_locales:
@@ -231,7 +231,7 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     test.open_questions_left = role_data.open_questions.copy()
     
-    await context.bot.send_message(context._chat_id,Settings.get_locale("start_test_explanation"),
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("start_test_explanation"),
                                   reply_markup=ReplyKeyboardRemove())
     
     return await ask_next_question(update, context)
@@ -258,7 +258,7 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if test.open_questions_left:
         question = test.open_questions_left.pop(0)
         context.user_data["last_question"] = question
-        await context.bot.send_message(context._chat_id,
+        await context.bot.send_message(update.effective_message.chat_id,
             f"{question}\n\n{Settings.get_locale('open_question_hint')}",
             reply_markup=ReplyKeyboardMarkup([[Settings.get_locale("button_skip")]], resize_keyboard=True, one_time_keyboard=True))
         return OPEN_QUESTION
@@ -270,7 +270,7 @@ async def receive_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     test = Settings.ongoing_tests.get(user_id)
     
     if not test:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return ConversationHandler.END
     
     try:
@@ -278,7 +278,7 @@ async def receive_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if rating < 1 or rating > 10:
             raise ValueError
     except (ValueError, TypeError):
-        await context.bot.send_message(context._chat_id,
+        await context.bot.send_message(update.effective_message.chat_id,
             Settings.get_locale("error_outofrange"),
             reply_markup=ReplyKeyboardMarkup(Settings.get_score_keyboard(), resize_keyboard=True))
         return QUESTION
@@ -297,7 +297,7 @@ async def receive_open_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     test = Settings.ongoing_tests.get(user_id)
     
     if not test:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return ConversationHandler.END
     
     if update.message.text not in Settings.skip_locales:
@@ -360,7 +360,7 @@ async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None):
 #     companies = cursor.fetchall()
     
 #     if not companies:
-#         await context.bot.send_message(context._chat_id,Settings.get_locale("company_results_nocompany"))
+#         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("company_results_nocompany"))
 #         return
     
 #     for company in companies:
@@ -386,14 +386,14 @@ async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None):
 #             summary = cursor.fetchone()
             
 #             if summary and summary[0] > 0:
-#                 await context.bot.send_message(context._chat_id,Settings.get_locale("company_results_full").format(
+#                 await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("company_results_full").format(
 #                     company_id, summary[0], round(summary[1], 1)
 #                 ))
 #             else:
-#                 await context.bot.send_message(context._chat_id,Settings.get_locale("company_results_none"))
+#                 await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("company_results_none"))
                 
 #         except Exception as e:
-#             await context.bot.send_message(context._chat_id,Settings.get_locale("error_generating_report"))
+#             await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_generating_report"))
 #             raise e
 
 async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -405,7 +405,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     companies = cursor.fetchall()
     
     if not companies:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_notest"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
         return
     
     company_ids = [company[0] for company in companies]
@@ -420,7 +420,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     results = cursor.fetchall()
     
     if not results:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_group_notest"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_group_notest"))
         return
     
     # Initialize aggregation variables
@@ -435,7 +435,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     categories = {row[0]: row[1] for row in cursor.fetchall()}
     
     # Process each result
-    await context.bot.send_message(context._chat_id,Settings.get_locale("group_test_results_amount").format(len(results)))
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("group_test_results_amount").format(len(results)))
     for result in results:
         result_id = result[0]
         
@@ -504,7 +504,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     else: test = Settings.ongoing_tests.pop(user_id, None)
     
     if not test:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error"))
         return ConversationHandler.END
     
     role_data = Settings.roles[test.role]
@@ -583,14 +583,31 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     if test.role=="Manager" or not context.user_data.get("company_id"):
         buttons = [[InlineKeyboardButton(markup,callback_data="getrecommendations")]]
         if markup_group: buttons.append([InlineKeyboardButton(markup_group,callback_data="getgrouprecommendations")])
-        message = await update.message.reply_photo(photo=img_buffer, 
-                                    caption=result_text+recomms_text+sum_up_text,
-                                    reply_markup=InlineKeyboardMarkup(buttons),
-                                    parse_mode='HTML')
+        # await update.message.reply_photo(photo=img_buffer, 
+        #                             caption=result_text+recomms_text+sum_up_text,
+        #                             reply_markup=InlineKeyboardMarkup(buttons),
+        #                             parse_mode='HTML')
+        await context.bot.send_photo(
+                update.effective_message.chat_id,
+                img_buffer,
+                result_text+recomms_text+sum_up_text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode="HTML",
+                message_thread_id=update.effective_message.message_thread_id,
+             )
+
     else:
-        await update.message.reply_photo(photo=img_buffer,
-                                         caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
-                                         reply_markup=ReplyKeyboardRemove())
+        await context.bot.send_photo(
+                update.effective_message.chat_id,
+                img_buffer,
+                Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode="HTML",
+                message_thread_id=update.effective_message.message_thread_id,
+             )
+        # await update.message.reply_photo(photo=img_buffer,
+        #                                  caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
+        #                                  reply_markup=ReplyKeyboardRemove())
     context.user_data.clear()
     return ConversationHandler.END
 async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -600,7 +617,7 @@ async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cursor.execute("UPDATE companies SET is_active = 0 WHERE created_by = ?", (user_id,))
     cursor = Settings.db.conn.commit()
-    await context.bot.send_message(context._chat_id,
+    await context.bot.send_message(update.effective_message.chat_id,
         Settings.get_locale("company_deleted"),
         reply_markup=ReplyKeyboardRemove()
     )
@@ -721,13 +738,13 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
     res = cursor.fetchone()
     print(user_id,res)
     if not res:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_notest"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
         return ConversationHandler.END
     if res[0]==10:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
         return ConversationHandler.END
     
-    await context.bot.send_message(context._chat_id,Settings.get_locale("request_email"))
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("request_email"))
     context.user_data["state"]=GETTING_EMAIL
 def is_valid_email(email):
     if not email or len(email) > 320: return False
@@ -736,7 +753,7 @@ def is_valid_email(email):
 async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Now that we have email, generate and send recommendations"""
     if not is_valid_email(update.message.text):
-        await context.bot.send_message(context._chat_id,Settings.get_locale("bad_email_address"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("bad_email_address"))
         return GETTING_EMAIL
 
     # Fetch data and generate recommendations only now
@@ -753,9 +770,9 @@ async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     result = cursor.fetchone()
     
     if not result:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_notest"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
         return ConversationHandler.END
-    await context.bot.send_message(context._chat_id,Settings.get_locale("email_generating"))
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_generating"))
     
     result_id, role, industry, team_size, person_cost, average_ti = result
     
@@ -791,7 +808,7 @@ async def receive_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     # Generate and send recommendations
     recs, image = await generate_recommendations(test)
     await send_results_by_email(recs, update.message.text, image)
-    await context.bot.send_message(context._chat_id,Settings.get_locale("email_sent"))
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_sent"))
 
     return ConversationHandler.END
 async def get_group_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -810,7 +827,7 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
     
     company = cursor.fetchone()
     if not company:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_nogrouptest"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_nogrouptest"))
         return ConversationHandler.END
     
     company_id = company[0]
@@ -824,7 +841,7 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
     participant_count = cursor.fetchone()[0]
     
     if participant_count == 0:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_group_notest"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_group_notest"))
         return ConversationHandler.END
     
     # Get average score for the group
@@ -836,10 +853,10 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
     avg_score = cursor.fetchone()[0] or 0
     
     if avg_score == 10:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
         return ConversationHandler.END
     
-    await context.bot.send_message(context._chat_id,Settings.get_locale("request_email"))
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("request_email"))
     
     # Store company_id and participant_count in context for email generation
     context.user_data['group_email_data'] = {
@@ -852,7 +869,7 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
 async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Generate and send group recommendations email"""
     if not is_valid_email(update.message.text):
-        await context.bot.send_message(context._chat_id,Settings.get_locale("bad_email_address"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("bad_email_address"))
         return GETTING_GROUP_EMAIL
 
     email = update.message.text
@@ -861,11 +878,11 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
     participant_count = group_data.get('participant_count', 0)
     
     if not company_id:
-        await context.bot.send_message(context._chat_id,Settings.get_locale("error_nogrouptest"))
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_nogrouptest"))
         return ConversationHandler.END
 
     cursor = Settings.db.conn.cursor()
-    await context.bot.send_message(context._chat_id,Settings.get_locale("email_generating"))
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_generating"))
     
     # Get aggregated results for the company (similar to stop_group_test logic)
     cursor.execute("""
@@ -910,7 +927,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Send email
     await send_results_by_email(recs, email, image)
-    await context.bot.send_message(context._chat_id,Settings.get_locale("email_sent"))
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_sent"))
 
     # Clean up
     context.user_data.pop('group_email_data', None)
@@ -939,12 +956,12 @@ async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     stdout, stderr = await proc.communicate()
     
     if proc.returncode != 0:
-        await context.bot.send_message(context._chat_id,f"Error getting logs:\n{stderr.decode()}")
+        await context.bot.send_message(update.effective_message.chat_id,f"Error getting logs:\n{stderr.decode()}")
         return
     
     logs = stdout.decode()
     for i in range(0, len(logs), 4096):
-        await context.bot.send_message(context._chat_id,logs[i:i+4096])
+        await context.bot.send_message(update.effective_message.chat_id,logs[i:i+4096])
 
 async def exec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Execute remote command (admin only)"""
@@ -952,7 +969,7 @@ async def exec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
     
     if not context.args:
-        await context.bot.send_message(context._chat_id,"Usage: /exec <command>")
+        await context.bot.send_message(update.effective_message.chat_id,"Usage: /exec <command>")
         return
     
     try:
@@ -970,10 +987,10 @@ async def exec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if stderr:
             output += f"STDERR:\n{stderr.decode()}\n"
             
-        await context.bot.send_message(context._chat_id,output[:4000])  # Truncate if too long
+        await context.bot.send_message(update.effective_message.chat_id,output[:4000])  # Truncate if too long
         
     except Exception as e:
-        await context.bot.send_message(context._chat_id,f"Error: {str(e)}")
+        await context.bot.send_message(update.effective_message.chat_id,f"Error: {str(e)}")
 
 async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send requested file (admin only)"""
@@ -981,7 +998,7 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     
     if not context.args:
-        await context.bot.send_message(context._chat_id,"Usage: /getfile <path>")
+        await context.bot.send_message(update.effective_message.chat_id,"Usage: /getfile <path>")
         return
     
     path = ' '.join(context.args)
@@ -990,7 +1007,7 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         with open(path, 'rb') as f:
             await update.message.reply_document(f)
     except Exception as e:
-        await context.bot.send_message(context._chat_id,f"Error: {str(e)}")
+        await context.bot.send_message(update.effective_message.chat_id,f"Error: {str(e)}")
 
 async def put_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Receive and save file (admin only)"""
@@ -998,13 +1015,13 @@ async def put_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     
     if not update.message.document and not update.message.reply_to_message:
-        await context.bot.send_message(context._chat_id,"Reply to a file message with /putfile <destination_path>")
+        await context.bot.send_message(update.effective_message.chat_id,"Reply to a file message with /putfile <destination_path>")
         return
     
     try:
         # Get destination path from command args
         if not context.args:
-            await context.bot.send_message(context._chat_id,"Usage: /putfile <destination_path>")
+            await context.bot.send_message(update.effective_message.chat_id,"Usage: /putfile <destination_path>")
             return
         
         dest_path = ' '.join(context.args)
@@ -1013,19 +1030,19 @@ async def put_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         file = await message.document.get_file()
         
         await file.download_to_drive(dest_path)
-        await context.bot.send_message(context._chat_id,f"File saved to {dest_path}")
+        await context.bot.send_message(update.effective_message.chat_id,f"File saved to {dest_path}")
         
     except Exception as e:
-        await context.bot.send_message(context._chat_id,f"Error: {str(e)}")
+        await context.bot.send_message(update.effective_message.chat_id,f"Error: {str(e)}")
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await context.bot.send_message(context._chat_id,repr(context.user_data))
+    await context.bot.send_message(update.effective_message.chat_id,repr(context.user_data))
 
 async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Safe update command that avoids multiple instances"""
     if not await check_admin(update):
         return
 
-    await context.bot.send_message(context._chat_id,"🔄 Starting update...")
+    await context.bot.send_message(update.effective_message.chat_id,"🔄 Starting update...")
     
     exit(1)
 
