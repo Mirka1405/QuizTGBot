@@ -20,7 +20,6 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
-    ConversationHandler,
     CallbackQueryHandler
 )
 
@@ -167,21 +166,20 @@ async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE, p
     # Store test
     Settings.ongoing_tests[user_id] = test
     
-    if not context.user_data.get("company_id") or role_id=="Manager":
-        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("team_size_question"))
-        return TEAM_SIZE
-    all_questions = []
-    role_data = Settings.roles[test.role]
-    for cat_id, category in role_data.questions.items():
-        test.score[cat_id] = 0
-        for question in category.questions:
-            all_questions.append((cat_id, question))
-    test.questions_left = all_questions
-    test.open_questions_left = role_data.open_questions.copy()
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("team_size_question"))
+    return TEAM_SIZE
+    # all_questions = []
+    # role_data = Settings.roles[test.role]
+    # for cat_id, category in role_data.questions.items():
+    #     test.score[cat_id] = 0
+    #     for question in category.questions:
+    #         all_questions.append((cat_id, question))
+    # test.questions_left = all_questions
+    # test.open_questions_left = role_data.open_questions.copy()
     
-    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("start_test_explanation"),
-                                    reply_markup=ReplyKeyboardRemove())
-    return await ask_next_question(update, context)
+    # await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("start_test_explanation"),
+    #                                 reply_markup=ReplyKeyboardRemove())
+    # return await ask_next_question(update, context)
 async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store team size and ask for person cost (optional)"""
     user_id = update.effective_user.id
@@ -195,7 +193,7 @@ async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         team_size = int(update.message.text)
         if team_size <= 0:
             raise ValueError
-        if team_size < 2 and context.user_data.get("company_id"):
+        if team_size < 2:
             await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_need_more_than_one"))
             return TEAM_SIZE
         test.team_size = team_size
@@ -220,7 +218,6 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if update.message.text not in Settings.skip_locales:
         test.person_cost = update.message.text
-        print("a")
     
     # Prepare all questions
     all_questions = []
@@ -567,7 +564,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     if test.role=="Manager" or not context.user_data.get("company_id"):
         sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None or average_unrounded<10 else "\n"
         if context.user_data.get("company_id"): markup_group = Settings.get_locale("button_getgrouprecommendations")
-        if test.person_cost and (isinstance(test.person_cost,(float,int)) or test.person_cost.isdigit()):
+        if test.person_cost and test.person_cost not in Settings.skip_locales and (isinstance(test.person_cost,(float,int)) or test.person_cost.isdigit()):
             person_cost = float(test.person_cost)
             loss = (1 - average_unrounded/10) * person_cost
             total_loss = loss * float(test.team_size)
@@ -743,7 +740,6 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
     """, (user_id,))
 
     res = cursor.fetchone()
-    print(user_id,res)
     if not res:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
         return NO
