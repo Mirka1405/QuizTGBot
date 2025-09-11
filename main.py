@@ -220,6 +220,7 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if update.message.text not in Settings.skip_locales:
         test.person_cost = update.message.text
+        print("a")
     
     # Prepare all questions
     all_questions = []
