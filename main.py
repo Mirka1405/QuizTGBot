@@ -48,7 +48,7 @@ async def handle_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if not query: return
-    fake = Update(update.update_id,update.callback_query.message)
+    fake = Update(update.update_id,update.callback_query.message,effective_user=update.effective_user)
     await handle_message(fake,context,query.data)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
@@ -709,7 +709,7 @@ async def generate_recommendations_group(test: Test) -> str:
 
 async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the email conversation - just verify test exists"""
-    user_id = update.effective_user.username or update.effective_user.full_name
+    user_id = update.effective_user.username
     
     cursor = Settings.db.conn.cursor()
     cursor.execute("""
@@ -718,8 +718,9 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
         ORDER BY id DESC
         LIMIT 1
     """, (user_id,))
-    
+
     res = cursor.fetchone()
+    print(user_id,res)
     if not res:
         await update.message.reply_text(Settings.get_locale("error_notest"))
         return ConversationHandler.END
