@@ -590,6 +590,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         #                             caption=result_text+recomms_text+sum_up_text,
         #                             reply_markup=InlineKeyboardMarkup(buttons),
         #                             parse_mode='HTML')
+        
         await context.bot.send_photo(
                 update.effective_message.chat_id,
                 img_buffer,
@@ -598,6 +599,8 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
                 parse_mode="HTML",
                 message_thread_id=update.effective_message.message_thread_id,
              )
+        message = await context.bot.send_message(update.effective_message.chat_id,".",reply_markup=ReplyKeyboardRemove())
+        await message.delete()
 
     else:
         await context.bot.send_photo(
