@@ -216,6 +216,7 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return NO
     
+    print(update.message.text,Settings.skip_locales)
     if update.message.text not in Settings.skip_locales:
         test.person_cost = update.message.text
     
