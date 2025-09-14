@@ -51,11 +51,11 @@ async def handle_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start with company ID parameter"""
     company_id = None
-    starttesttext = Settings.get_locale("button_starttest")
+    starttesttext = Settings.get_locale("button_starttest" if context.args else "button_starttest_alt")
     grouptesttext = Settings.get_locale("button_grouptest")
     Settings.skip_locales.add(Settings.get_locale("button_skip"))
 
-    Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,"getgrouprecommendations":get_group_recommendations})
+    Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,"getgrouprecommendations":get_group_recommendations,"grouptestresults":group_test_results})
 
     kb = [[InlineKeyboardButton(starttesttext,callback_data="starttest")]]
     
@@ -63,7 +63,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not context.args[0].isdigit():
             await context.bot.send_message(update.effective_message.chat_id,
                 Settings.get_locale("error_companylinkstopped"),
-                reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
+                reply_markup=InlineKeyboardMarkup(kb)
             )
             return
         
@@ -75,7 +75,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not result or not result[0]:
             await context.bot.send_message(update.effective_message.chat_id,
                 Settings.get_locale("error_companylinkstopped"),
-                reply_markup=ReplyKeyboardMarkup([kb], resize_keyboard=True)
+                reply_markup=InlineKeyboardMarkup(kb)
             )
             return
     
@@ -144,7 +144,24 @@ async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # Check if this is a group test and industry already exists
     company_id = context.user_data.get('company_id')
     if company_id and role_id!="Manager":
-        return await receive_industry(update, context, True)
+        user_id = update.effective_user.id
+        test = Test(user_id)
+        test.role = role_id
+        
+        # Store test
+        Settings.ongoing_tests[user_id] = test
+        all_questions = []
+        role_data = Settings.roles[test.role]
+        for cat_id, category in role_data.questions.items():
+            test.score[cat_id] = 0
+            for question in category.questions:
+                all_questions.append((cat_id, question))
+        test.questions_left = all_questions
+        test.open_questions_left = role_data.open_questions.copy()
+        
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("start_test_explanation"),
+                                        reply_markup=ReplyKeyboardRemove())
+        return await ask_next_question(update, context)
     
     # Create keyboard with industries
     keyboard = [[industry] for industry in Settings.industries]
@@ -173,18 +190,7 @@ async def receive_industry(update: Update, context: ContextTypes.DEFAULT_TYPE, p
     
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("team_size_question"))
     return TEAM_SIZE
-    # all_questions = []
-    # role_data = Settings.roles[test.role]
-    # for cat_id, category in role_data.questions.items():
-    #     test.score[cat_id] = 0
-    #     for question in category.questions:
-    #         all_questions.append((cat_id, question))
-    # test.questions_left = all_questions
-    # test.open_questions_left = role_data.open_questions.copy()
     
-    # await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("start_test_explanation"),
-    #                                 reply_markup=ReplyKeyboardRemove())
-    # return await ask_next_question(update, context)
 async def receive_team_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store team size and ask for person cost (optional)"""
     user_id = update.effective_user.id
@@ -565,10 +571,16 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     recomms_text = ""
     result_text = None
     markup = Settings.get_locale("button_getrecommendations")
-    markup_group = None
+    callbackstr = "getrecommendations"
     if test.role=="Manager" or not context.user_data.get("company_id"):
         sum_up_text = "\n"+Settings.get_locale("results_score_sum_up") if company_id is None or average_unrounded<10 else "\n"
-        if context.user_data.get("company_id"): markup_group = Settings.get_locale("button_getgrouprecommendations")
+        if group:
+            markup = Settings.get_locale("button_getgrouprecommendations")
+            callbackstr = "getgrouprecommendations"
+        elif context.user_data.get("company_id"):
+            markup = Settings.get_locale("button_grouptestresults")
+            callbackstr = "grouptestresults"
+            sum_up_text += "\n"+Settings.get_locale("results_button_explanation")
         if test.person_cost and test.person_cost not in Settings.skip_locales and (isinstance(test.person_cost,(float,int)) or test.person_cost.isdigit()):
             person_cost = float(test.person_cost)
             loss = (1 - average_unrounded/10) * person_cost
@@ -587,12 +599,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             result_text = Settings.get_locale("results_perfect")
 
     if test.role=="Manager" or not context.user_data.get("company_id"):
-        buttons = [[InlineKeyboardButton(markup,callback_data="getrecommendations")]]
-        if markup_group: buttons.append([InlineKeyboardButton(markup_group,callback_data="getgrouprecommendations")])
-        # await update.message.reply_photo(photo=img_buffer, 
-        #                             caption=result_text+recomms_text+sum_up_text,
-        #                             reply_markup=InlineKeyboardMarkup(buttons),
-        #                             parse_mode='HTML')
+        buttons = [[InlineKeyboardButton(markup,callback_data=callbackstr)]]
         
         await context.bot.send_photo(
                 update.effective_message.chat_id,
@@ -614,9 +621,6 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
                 parse_mode="HTML",
                 message_thread_id=update.effective_message.message_thread_id,
              )
-        # await update.message.reply_photo(photo=img_buffer,
-        #                                  caption=Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
-        #                                  reply_markup=ReplyKeyboardRemove())
     context.user_data.clear()
     return NO
 async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1057,6 +1061,7 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_launch_message(application):
     startup_msg = f"Bot started successfully!\n• Environment: {sys.platform}"
     await application.bot.send_message(chat_id=Settings.config["main_admin_id"], text=startup_msg)
+    await clear_webhook(application)
 
 async def shutdown(application: Application):
     """Gracefully shutdown the bot"""
@@ -1073,13 +1078,19 @@ async def shutdown(application: Application):
     await application.shutdown()
     exit(1)
 
+
+async def clear_webhook(application: Application):
+    try:
+        await application.bot.delete_webhook(drop_pending_updates=True)
+    except Exception as e:
+        print(f"Failed to delete webhook: {e}")
+
 def main() -> None:
     """Start the bot."""
     # Load environment and configuration
     if not load_dotenv():
         raise FileNotFoundError("В этой папке нет файла \".env\". Создайте файл .env с полем TOKEN=<токен бота> и EMAIL_PASSWORD=<пароль от почты в конфиге>.")
     
-
     Settings.get_config()
     Settings.init_db(Settings.config.get("database", "database.db"))
     Settings.load_locales(Settings.config.get("locale_folder", "locales"))
@@ -1105,34 +1116,6 @@ def main() -> None:
     application.add_handler(CommandHandler("ping", ping))
     application.add_handler(CommandHandler("pong", ping))
     application.add_handler(CommandHandler("update", update_command))
-
-    # send_launch_message(application)
-    
-    # Add conversation handler for the test
-    # conv_handler = ConversationHandler(
-    #     entry_points=[CommandHandler("starttest", start_test),CommandHandler("getrecommendations", get_recommendations),CommandHandler("getgrouprecommendations", get_group_recommendations)],
-    #     states={
-    #         INDUSTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_industry)],
-    #         ROLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_role)],
-    #         TEAM_SIZE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_team_size)],
-    #         PERSON_COST: [
-    #             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_person_cost),
-    #             CommandHandler("skip", receive_person_cost)
-    #         ],
-    #         QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_answer)],
-    #         OPEN_QUESTION: [
-    #             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_open_answer),
-    #             CommandHandler("skip", receive_open_answer)
-    #         ],
-    #         GETTING_EMAIL: [
-    #             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email)
-    #         ],
-    #         GETTING_GROUP_EMAIL: [
-    #             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_group_email)
-    #         ]
-    #     },
-    #     fallbacks=[CommandHandler("cancel", cancel_test)],
-    # )
     
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
@@ -1147,7 +1130,7 @@ def main() -> None:
     application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
     application.add_handler(CommandHandler("grouptestresults", group_test_results))
     application.add_handler(CallbackQueryHandler(handle_inline))
-    # application.add_handler(conv_handler)
+    
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

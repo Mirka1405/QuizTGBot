@@ -29,9 +29,20 @@ def generate_spidergram(categories, values, title):
     # Set y-axis
     max_val = max(values)
     ax.set_ylim(0, max_val * 1.1)
-    ax.set_yticks(np.linspace(0, max_val, 5))
     ax.grid(True)
-    
+    for angle, value in zip(angles[:-1], values[:-1]):
+        ax.annotate(
+            f"{value:.1f}",
+            xy=(angle, value),
+            xytext=(0, -5),
+            textcoords='offset points',
+            ha='center',
+            va='bottom',
+            fontsize=11,
+            fontweight='bold',
+            color='darkred',
+            bbox=dict(boxstyle="round,pad=0.2", facecolor="yellow", alpha=0.7, edgecolor="none")
+        )
     # Add title
     ax.set_title(title, size=16, pad=20)
     
@@ -71,7 +82,32 @@ def generate_double_spidergram(categories,values1,values2,title):
     # Set y-axis
     max_val = max(values1+values2)
     ax.set_ylim(0, max_val * 1.1)
-    ax.set_yticks(np.linspace(0, max_val, 5))
+    for angle, value in zip(angles[:-1], values1[:-1]):
+        ax.annotate(
+            f"{value:.1f}",
+            xy=(angle, value),
+            xytext=(0, -5),
+            textcoords='offset points',
+            ha='center',
+            va='bottom',
+            fontsize=11,
+            fontweight='bold',
+            color='darkblue',
+            bbox=dict(boxstyle="round,pad=0.2", facecolor="yellow", alpha=0.7, edgecolor="none")
+        )
+    for angle, value in zip(angles[:-1], values2[:-1]):
+        ax.annotate(
+            f"{value:.1f}",
+            xy=(angle, value),
+            xytext=(0, -5),
+            textcoords='offset points',
+            ha='center',
+            va='bottom',
+            fontsize=11,
+            fontweight='bold',
+            color='darkred',
+            bbox=dict(boxstyle="round,pad=0.2", facecolor="yellow", alpha=0.7, edgecolor="none")
+        )
     ax.grid(True)
     
     # Add title
