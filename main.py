@@ -79,7 +79,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
     
-    welcome_msg = Settings.get_locale("start_reply")
+    welcome_msg = Settings.get_locale("start_reply").format(Settings.config["link"])
     context.user_data.clear()
     if company_id:
         context.user_data['company_id'] = company_id
@@ -119,7 +119,7 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     keyboard = [[role.display_name] for role in Settings.roles.values()]
     await context.bot.send_message(update.effective_message.chat_id,
         Settings.get_locale("role_select"),
-        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
     context.user_data["state"] = ROLE
 
@@ -137,6 +137,19 @@ async def receive_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if not role_id:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_wrongrole"))
         return ROLE
+    
+    grouptest = context.user_data.get("company_id")
+    if grouptest:
+        cursor = Settings.db.conn.cursor()
+        cursor.execute("SELECT telegram_username FROM results WHERE company_id = ? AND role = ?", (grouptest,role_id))
+        res = cursor.fetchall()
+        if res:
+            if res[0][0]==update.effective_user.username:
+                await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_group_test_completed"))
+                return ROLE
+            if role_id == "Manager":
+                await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_group_test_completed_by_manager").format(res[0][0]))
+                return ROLE
     
     # Store role in context
     context.user_data['role_id'] = role_id
@@ -413,7 +426,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     cursor = Settings.db.conn.cursor()
 
     # Get all active companies created by this user
-    cursor.execute("SELECT id FROM companies WHERE created_by = ? AND is_active = 1", (user_id,))
+    cursor.execute("SELECT id FROM companies WHERE created_by = ? AND is_active = 1 ORDER BY id DESC LIMIT 1", (user_id,))
     companies = cursor.fetchall()
     
     if not companies:
@@ -541,17 +554,19 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
                                f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
     else:
         cursor = Settings.db.conn.cursor()
-
-        cursor.execute("""
-            SELECT c.id, c.name, AVG(na.answer)
-            FROM results r
-            JOIN num_answers na ON r.id = na.id
-            JOIN num_questions nq ON na.question_id = nq.id
-            JOIN categories c ON nq.category_id = c.id
-            WHERE r.role = 'Manager'
-            GROUP BY c.id, c.name
-            ORDER BY c.id
-        """)
+        cursor.execute("SELECT id FROM results WHERE telegram_username = ? ORDER BY timestamp DESC LIMIT 1",(update.effective_user.username,))
+        rid = cursor.fetchall()
+        if rid:
+            cursor.execute("""
+                SELECT c.id, c.name, AVG(na.answer)
+                FROM results r
+                JOIN num_answers na ON r.id = na.id
+                JOIN num_questions nq ON na.question_id = nq.id
+                JOIN categories c ON nq.category_id = c.id
+                WHERE r.role = 'Manager' AND r.id = ?
+                GROUP BY c.id, c.name
+                ORDER BY c.id
+            """,(rid[0][0],))
 
         manager_results = {}
         for row in cursor.fetchall():
@@ -560,12 +575,13 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         if len(list(manager_results.keys()))==0:
             img_buffer = generate_spidergram(list(results.keys()), list(group.score.values()),
                                f"Индекс максимума команды")
-        img_buffer = generate_double_spidergram(
-            list(results.keys()), 
-            list(group.score.values()), 
-            list(manager_results.values()),
-            f"Индекс максимума команды"
-        )
+        else:
+            img_buffer = generate_double_spidergram(
+                list(results.keys()), 
+                list(group.score.values()), 
+                list(manager_results.values()),
+                f"Индекс максимума команды"
+            )
     sum_up_text=""
     loss_text=""
     recomms_text = ""
@@ -598,7 +614,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         else:
             result_text = Settings.get_locale("results_perfect")
 
-    if test.role=="Manager" or not context.user_data.get("company_id"):
+    if not context.user_data.get("company_id"):
         buttons = [[InlineKeyboardButton(markup,callback_data=callbackstr)]]
         
         await context.bot.send_photo(
@@ -611,13 +627,14 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
              )
         message = await context.bot.send_message(update.effective_message.chat_id,".",reply_markup=ReplyKeyboardRemove())
         await message.delete()
-
     else:
+        markup_buttons = ReplyKeyboardRemove()
+        if test.role=="Manager": markup_buttons = InlineKeyboardMarkup([[InlineKeyboardButton(markup,callback_data=callbackstr)]])
         await context.bot.send_photo(
                 update.effective_message.chat_id,
                 img_buffer,
                 Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
-                reply_markup=ReplyKeyboardRemove(),
+                reply_markup=markup_buttons,
                 parse_mode="HTML",
                 message_thread_id=update.effective_message.message_thread_id,
              )
@@ -697,7 +714,8 @@ async def generate_recommendations_group(test: Test) -> str:
         category = role_data.questions[cat_id]
         category_score = score
         results[category.display_name] = category_score
-        if category_score==10: continue
+        category_score = round(category_score,1)
+        if category_score == 10: continue
         if category_score == 10:
             recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + "<br>" + Settings.get_locale("category_perfect")
         elif category_score > 7.5:
@@ -931,7 +949,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
         test.score[category_name] = sum(scores) / len(scores) if scores else 0
 
     # Generate recommendations
-    recs, image = await generate_recommendations_group(test,)
+    recs, image = await generate_recommendations_group(test)
     
     # Add group-specific information to the email
     group_info = Settings.get_locale("group_test_results_amount").format(participant_count)
