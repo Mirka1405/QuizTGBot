@@ -89,7 +89,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(update.effective_message.chat_id,
         welcome_msg,
         reply_markup=InlineKeyboardMarkup(kb),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
