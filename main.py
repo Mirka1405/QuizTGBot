@@ -114,7 +114,7 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     #attempt again just in case
     Settings.skip_locales.add(Settings.get_locale("button_skip"))
 
-    Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,"getgrouprecommendations":get_group_recommendations})
+    Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,"getgrouprecommendations":get_group_recommendations,"grouptestresults":group_test_results})
 
     keyboard = [[role.display_name] for role in Settings.roles.values()]
     await context.bot.send_message(update.effective_message.chat_id,
