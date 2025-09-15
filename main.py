@@ -634,7 +634,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         await context.bot.send_photo(
                 update.effective_message.chat_id,
                 img_buffer,
-                Settings.get_locale("results_employee").format(average,"@"+Settings.config["consultation_tg"]),
+                Settings.get_locale("results_manager_group" if test.role == "Manager" else "results_employee").format(average,"@"+Settings.config["consultation_tg"]),
                 reply_markup=markup_buttons,
                 parse_mode="HTML",
                 message_thread_id=update.effective_message.message_thread_id,
