@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 from copy import copy
 
-def generate_spidergram(categories, values, title):
+def generate_spidergram(categories, values, title, color='darkblue'):
     """Generate a spidergram image and return it as a BytesIO buffer"""
     num_vars = len(categories)
     
@@ -18,8 +18,8 @@ def generate_spidergram(categories, values, title):
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
     
     # Plot data
-    ax.plot(angles, values, color='blue', linewidth=2, linestyle='solid')
-    ax.fill(angles, values, color='blue', alpha=0.25)
+    ax.plot(angles, values, color='blue' if color == "darkblue" else 'red', linewidth=2, linestyle='solid')
+    ax.fill(angles, values, color='blue' if color == "darkblue" else 'red', alpha=0.25)
     
     # Customize axes
     ax.set_theta_offset(np.pi / 2)
@@ -40,7 +40,7 @@ def generate_spidergram(categories, values, title):
             va='bottom',
             fontsize=11,
             fontweight='bold',
-            color='darkred',
+            color=color,
             bbox=dict(boxstyle="round,pad=0.2", facecolor="yellow", alpha=0.7, edgecolor="none")
         )
     # Add title
@@ -68,7 +68,7 @@ def generate_double_spidergram(categories,values1,values2,title):
     # Create figure
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
     # Plot data
-    ax.plot(angles, values1, color='blue', linewidth=2, linestyle='solid',label='Сотрудники')
+    ax.plot(angles, values1, color='blue', linewidth=2, linestyle='solid',label='Вся команда')
     ax.fill(angles, values1, color='blue', alpha=0.25)
     ax.plot(angles, values2, color='red', linewidth=2, linestyle='solid',label="Руководитель")
     ax.fill(angles, values2, color='red', alpha=0.25)

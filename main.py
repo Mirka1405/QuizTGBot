@@ -551,7 +551,8 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
     
     if not group:
         img_buffer = generate_spidergram(list(results.keys()), list(results.values()),
-                               f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
+                               f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}",
+                               "darkred" if test.role=="Manager" else "darkblue")
     else:
         cursor = Settings.db.conn.cursor()
         cursor.execute("SELECT id FROM results WHERE telegram_username = ? ORDER BY timestamp DESC LIMIT 1",(update.effective_user.username,))
@@ -574,7 +575,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             manager_results[category_name] = avg_score
         if len(list(manager_results.keys()))==0:
             img_buffer = generate_spidergram(list(results.keys()), list(group.score.values()),
-                               f"Индекс максимума команды")
+                               f"Индекс максимума команды", "darkblue")
         else:
             img_buffer = generate_double_spidergram(
                 list(results.keys()), 
@@ -696,7 +697,8 @@ async def generate_recommendations(test: Test) -> str:
                     "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
     
     image = generate_spidergram(list(results.keys()), list(results.values()),
-                               f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}")
+                               f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}",
+                               "darkred" if test.role=="Manager" else "darkblue")
     return recs,image
 async def generate_recommendations_group(test: Test) -> str:
     """Generate recommendation text based on test results"""
@@ -749,7 +751,7 @@ async def generate_recommendations_group(test: Test) -> str:
         manager_results[category_name] = avg_score
     if len(list(manager_results.keys()))==0:
         image = generate_spidergram(list(results.keys()), list(results.values()),
-                            f"Индекс максимума команды")
+                            f"Индекс максимума команды", "darkblue")
     else: image = generate_double_spidergram(list(results.keys()), list(results.values()), list(manager_results.values()),
                                f"Индекс максимума команды.")
     return recs,image
