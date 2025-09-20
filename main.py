@@ -3,7 +3,8 @@
 """
 Skill Assessment Bot with industry selection, role selection, and questionnaire
 """
-import os
+import datetime
+from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 import io
@@ -13,6 +14,7 @@ from subprocess import PIPE
 import asyncio
 import sys
 
+import pip
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -26,6 +28,7 @@ from telegram.ext import (
 from dotenv import load_dotenv
 from os import getenv
 
+import pdf_generator
 from spidergram import *
 
 import smtplib
@@ -89,7 +92,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(update.effective_message.chat_id,
         welcome_msg,
         reply_markup=InlineKeyboardMarkup(kb),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 async def group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -339,20 +343,22 @@ def wrap_email_html(content):
         "NUMBER": Settings.config["consultation_tg"],
         "LINK": Settings.config["link"],
         "MAIL": Settings.config["owner_mail"],
+        "LEGEND": Settings.get_locale("email_legend"),
         "EMOJIFREE": Settings.config["free_rec_emoji"],
-        "EMOJIPAID": Settings.config["paid_rec_emoji"]
+        "EMOJIPAID": Settings.config["paid_rec_emoji"],
     }
 
     result = Settings.html
     for placeholder, value in replacements.items():
         result = result.replace(placeholder, str(value))
     return result
-async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None):
+async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None,csv:str|None=None,pdf:BytesIO|None=None):
     """Send the collected answers via email"""
     if not 'email' in Settings.config:
         print("Email configuration not found")
         return
-    
+    if csv: text+=Settings.get_locale("email_csv_attached")
+    if pdf: text+=Settings.get_locale("email_pdf_attached")
     email_config = Settings.config['email']
     
     msg = MIMEMultipart()
@@ -364,10 +370,18 @@ async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None):
         image.seek(0)
         img_data = image.read()
         img = MIMEImage(img_data)
-        # img.add_header('Content-Disposition', 'attachment', filename="team_assessment.png")
         img.add_header("Content-ID", "<image1>")
+        img.add_header('Content-Disposition', 'inline')
         msg.attach(img)
-
+    if csv:
+        filebase = MIMEApplication(csv.encode('utf-8'))
+        filebase['Content-Disposition'] = f'attachment; filename=results.csv'
+        msg.attach(filebase)
+    if pdf:
+        pdf.seek(0)
+        filebase = MIMEApplication(pdf.read())
+        filebase['Content-Disposition'] = f'attachment; filename=report.pdf'
+        msg.attach(filebase)
     try:
         with smtplib.SMTP_SSL(email_config['smtp_server'], email_config['smtp_port']) as server:
             server.login(email_config['sender_email'], getenv("EMAIL_PASSWORD"))
@@ -375,51 +389,50 @@ async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None):
     except Exception as e:
         print(f"Failed to send email: {e}")
 
-# async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     """Send company results as CSV file"""
-#     user_id = update.effective_user.id
+async def results_to_csv(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     
-#     # Find companies created by this user
-#     cursor = Settings.db.conn.cursor()
-#     cursor.execute("SELECT id FROM companies WHERE created_by = ?", (user_id,))
-#     companies = cursor.fetchall()
+    # Find companies created by this user
+    cursor = Settings.db.conn.cursor()
+    cursor.execute("SELECT id FROM companies WHERE created_by = ? AND is_active = 1 ORDER BY id DESC LIMIT 1", (user_id,))
+    companies = cursor.fetchall()
     
-#     if not companies:
-#         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("company_results_nocompany"))
-#         return
+    if not companies:
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error"))
+        return
     
-#     for company in companies:
-#         company_id = company[0]
+    company_id = companies[0][0]
+    
+    try:
+        # Generate CSV content
+        csv_content = Settings.db.get_company_results_csv(company_id)
+        return csv_content
         
-#         try:
-#             # Generate CSV content
-#             csv_content = Settings.db.get_company_results_csv(company_id)
+        # Send as file
+        # await update.message.reply_document(
+        #     document=io.BytesIO(csv_content.encode('utf-8')),
+        #     filename=f"company_{company_id}_results.csv",
+        #     caption=Settings.get_locale("company_results")
+        # )
+        
+        # Send summary
+        # cursor.execute("""
+        # SELECT COUNT(*), AVG(average_ti) 
+        # FROM results 
+        # WHERE company_id = ?
+        # """, (company_id,))
+        # summary = cursor.fetchone()
+        
+        # if summary and summary[0] > 0:
+        #     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("company_results_full").format(
+        #         summary[0], round(summary[1], 1)
+        #     ))
+        # else:
+        #     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("company_results_none"))
             
-#             # Send as file
-#             await update.message.reply_document(
-#                 document=io.BytesIO(csv_content.encode('utf-8')),
-#                 filename=f"company_{company_id}_results.csv",
-#                 caption=Settings.get_locale("company_results")
-#             )
-            
-#             # Send summary
-#             cursor.execute("""
-#             SELECT COUNT(*), AVG(average_ti) 
-#             FROM results 
-#             WHERE company_id = ?
-#             """, (company_id,))
-#             summary = cursor.fetchone()
-            
-#             if summary and summary[0] > 0:
-#                 await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("company_results_full").format(
-#                     company_id, summary[0], round(summary[1], 1)
-#                 ))
-#             else:
-#                 await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("company_results_none"))
-                
-#         except Exception as e:
-#             await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_generating_report"))
-#             raise e
+    except Exception as e:
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_generating_report"))
+        raise e
 
 async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -555,7 +568,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
                                "darkred" if test.role=="Manager" else "darkblue")
     else:
         cursor = Settings.db.conn.cursor()
-        cursor.execute("SELECT id FROM results WHERE telegram_username = ? ORDER BY timestamp DESC LIMIT 1",(update.effective_user.username,))
+        cursor.execute("SELECT id FROM results WHERE telegram_username = ? AND role = 'Manager' ORDER BY timestamp DESC LIMIT 1",(update.effective_user.username,))
         rid = cursor.fetchall()
         if rid:
             cursor.execute("""
@@ -700,7 +713,7 @@ async def generate_recommendations(test: Test) -> str:
                                f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}",
                                "darkred" if test.role=="Manager" else "darkblue")
     return recs,image
-async def generate_recommendations_group(test: Test) -> str:
+async def generate_recommendations_group(test: Test, user_id) -> str:
     """Generate recommendation text based on test results"""
     role_data = Settings.roles[test.role]
     average = round(test.average, 2)
@@ -733,22 +746,25 @@ async def generate_recommendations_group(test: Test) -> str:
                     "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "<br>" + \
                     "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
     cursor = Settings.db.conn.cursor()
-
-    cursor.execute("""
-        SELECT c.id, c.name, AVG(na.answer)
-        FROM results r
-        JOIN num_answers na ON r.id = na.id
-        JOIN num_questions nq ON na.question_id = nq.id
-        JOIN categories c ON nq.category_id = c.id
-        WHERE r.role = 'Manager'
-        GROUP BY c.id, c.name
-        ORDER BY c.id
-    """)
-
+    cursor.execute("SELECT id FROM results WHERE telegram_username = ? AND role = 'Manager' ORDER BY timestamp DESC LIMIT 1",(user_id,))
+    rid = cursor.fetchall()
     manager_results = {}
-    for row in cursor.fetchall():
-        category_id, category_name, avg_score = row
-        manager_results[category_name] = avg_score
+
+    if rid:
+        cursor.execute("""
+            SELECT c.id, c.name, AVG(na.answer)
+            FROM results r
+            JOIN num_answers na ON r.id = na.id
+            JOIN num_questions nq ON na.question_id = nq.id
+            JOIN categories c ON nq.category_id = c.id
+            WHERE r.role = 'Manager' AND r.id = ?
+            GROUP BY c.id, c.name
+            ORDER BY c.id
+        """,(rid[0][0],))
+
+        for row in cursor.fetchall():
+            category_id, category_name, avg_score = row
+            manager_results[category_name] = avg_score
     if len(list(manager_results.keys()))==0:
         image = generate_spidergram(list(results.keys()), list(results.values()),
                             f"Индекс максимума команды", "darkblue")
@@ -898,10 +914,34 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
     
     context.user_data["state"]=GETTING_GROUP_EMAIL
 
+async def results_to_pdf(is_group_test: bool,
+                         team_size: int,
+                         respondents: int,
+                         tmi: float,
+                         main_recommendation: str,
+                         open_answers: list[str],
+                         email_recommendation: str,
+                         ):
+    form_data = {
+        'type': f'{"Групповой" if is_group_test else "Индивидуальный"}\nотчет',
+        'team_size': str(team_size),
+        'amnt': str(respondents),
+        'tmi': str(tmi),
+        'main_text': pdf_generator.FillinElement(main_recommendation,12),
+        'open_answers': pdf_generator.FillinElement("• "+"\n• ".join(open_answers),16), #'• помидор\n\n• огурец',
+        'recommendations':  pdf_generator.FillinElement(email_recommendation,12,False),
+        'tg': "@"+Settings.config["consultation_tg"],
+        'email': Settings.config["owner_mail"],
+        'link': Settings.config["link"],
+        'date': datetime.datetime.today().strftime('%d.%m.%Y')
+    }
+    return pdf_generator.replace_placeholders_htmlbox('pdf_template.pdf', form_data)
+
+
 async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Generate and send group recommendations email"""
     if not is_valid_email(update.message.text):
-        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("bad_email_address"))
+        await context.bot.send_message(update.effective_chat.id,Settings.get_locale("bad_email_address"))
         return GETTING_GROUP_EMAIL
 
     email = update.message.text
@@ -931,18 +971,25 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Calculate category averages across all participants
     category_scores = {}
-    for row in cursor.fetchall():
+    results = cursor.fetchall()
+    person_cost_group = None
+    team_size_group = None
+    industry_group = None
+    for row in results:
         role, industry, team_size, person_cost, category_name, avg_score = row
         if category_name not in category_scores:
             category_scores[category_name] = []
+        if team_size and not team_size_group: team_size_group=team_size
+        if industry and not industry_group: industry_group=industry
+        if person_cost and not person_cost_group: person_cost_group=person_cost
         category_scores[category_name].append(avg_score)
 
     # Create aggregated test object
     test = Test(update.effective_user.id)
     test.role = "Manager"
-    test.industry = industry  # Will be from the last result, but we need better aggregation
-    test.team_size = team_size
-    test.person_cost = person_cost
+    test.industry = industry_group
+    test.team_size = team_size_group
+    test.person_cost = person_cost_group
     test.score = {}
     test.force_average_by_score = True
 
@@ -951,14 +998,50 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
         test.score[category_name] = sum(scores) / len(scores) if scores else 0
 
     # Generate recommendations
-    recs, image = await generate_recommendations_group(test)
+    recs, image = await generate_recommendations_group(test,update.effective_user.username)
     
     # Add group-specific information to the email
     group_info = Settings.get_locale("group_test_results_amount").format(participant_count)
     recs = group_info + "\n<br>" + recs
 
-    # Send email
-    await send_results_by_email(recs, email, image)
+    loss_text = ""
+    if test.person_cost:
+        person_cost = float(test.person_cost)
+        loss = (1 - test.average/10) * person_cost
+        total_loss = loss * float(test.team_size)
+        loss_text=Settings.get_locale("results_losscalc").format(
+                round(100-test.average*10), round(total_loss)
+            )
+    result_text = ""
+    recomms_text = ""
+    if min(test.score.values())<10:
+        additions = [k for k,v in test.score.items() if v<10]
+        if not additions: additions = [k for k,v in test.score.items() if v<=min(test.score.values())]
+        recomms_text+="\n• "+";\n• ".join(additions)
+        recomms_text+="."
+        result_text = Settings.get_locale("results").format(round(test.average,2),round(100-test.average*10,1),loss_text)
+    else:
+        result_text = Settings.get_locale("results_perfect")
+
+
+    cursor.execute("""
+        SELECT sq.text, sa.answer 
+        FROM str_answers sa
+        JOIN str_questions sq ON sa.question_id = sq.id
+        JOIN results r ON sa.id = r.id
+        WHERE r.company_id = ?
+    """, (company_id,))
+    
+    open_answers = cursor.fetchall()
+    
+    # Process open answers into a list of strings
+    open_answers_list = []
+    for question, answer in open_answers:
+        open_answers_list.append(answer)
+
+    legend = Settings.get_locale("email_legend").replace("EMOJIFREE",Settings.config["free_rec_emoji"]).replace("EMOJIPAID",Settings.config["paid_rec_emoji"])
+    pdf = await results_to_pdf(True,team_size_group,len(results)//len(category_scores),test.average,result_text+recomms_text,open_answers_list,recs+"<br>"+legend)
+    await send_results_by_email(recs, email, image, await results_to_csv(update,context), pdf)
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_sent"))
 
     # Clean up
@@ -1107,6 +1190,7 @@ async def clear_webhook(application: Application):
 
 def main() -> None:
     """Start the bot."""
+    # pip.main(['install','-r','requirements.txt'])
     # Load environment and configuration
     if not load_dotenv():
         raise FileNotFoundError("В этой папке нет файла \".env\". Создайте файл .env с полем TOKEN=<токен бота> и EMAIL_PASSWORD=<пароль от почты в конфиге>.")
@@ -1146,7 +1230,6 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("grouptest", group_test))
-    # application.add_handler(CommandHandler("myresults", my_results)) # TODO: paywall this
     application.add_handler(CommandHandler("stopgrouptest", stop_group_test))
     application.add_handler(CommandHandler("grouptestresults", group_test_results))
     application.add_handler(CallbackQueryHandler(handle_inline))

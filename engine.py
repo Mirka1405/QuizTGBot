@@ -430,9 +430,9 @@ class DatabaseManager:
             row = [
                 user_data[0],  # username
                 user_data[1],  # role
-                user_data[2],  # industry
-                str(user_data[3]),  # team_size
-                str(user_data[4]) if user_data[4] else "",  # person_cost
+                user_data[2] if user_data[2] else "-",  # industry
+                str(user_data[3]) if user_data[3] else "0",  # team_size
+                str(user_data[4]) if user_data[4] else "0",  # person_cost
                 str(user_data[5])  # average_ti
             ]
             
