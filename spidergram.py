@@ -54,8 +54,13 @@ def generate_spidergram(categories, values, title, color='darkblue'):
     
     return img_buffer
 
-def generate_double_spidergram(categories,values1,values2,title):
-    num_vars = len(categories)
+def generate_double_spidergram(vals1:dict,vals2:dict,title):
+    """vals1 and vals2 are dict with the same keys."""
+    num_vars = len(vals1)
+    values1,values2 = [],[]
+    for i in vals1.keys():
+        values1.append(vals1[i])
+        values2.append(vals2[i])
     
     # Compute angles for each axis
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
@@ -77,7 +82,7 @@ def generate_double_spidergram(categories,values1,values2,title):
     # Customize axes
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
-    ax.set_thetagrids(np.degrees(angles[:-1]), labels=categories, fontsize=16)
+    ax.set_thetagrids(np.degrees(angles[:-1]), labels=list(vals1.keys()), fontsize=16)
     
     # Set y-axis
     max_val = max(values1+values2)

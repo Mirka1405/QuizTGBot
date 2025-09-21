@@ -570,9 +570,8 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
                                f"Индекс максимума команды", "darkblue")
         else:
             img_buffer = generate_double_spidergram(
-                list(results.keys()), 
-                list(group.score.values()), 
-                list(manager_results.values()),
+                group.score,
+                manager_results,
                 f"Индекс максимума команды"
             )
     sum_up_text=""
@@ -758,8 +757,7 @@ async def generate_recommendations_group(test: Test, user_id) -> str:
     if len(list(manager_results.keys()))==0:
         image = generate_spidergram(list(results.keys()), list(results.values()),
                             f"Индекс максимума команды", "darkblue")
-    else: image = generate_double_spidergram(list(results.keys()), list(results.values()), list(manager_results.values()),
-                               f"Индекс максимума команды.")
+    else: image = generate_double_spidergram(results, manager_results,f"Индекс максимума команды.")
     return recs,image
 
 async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
