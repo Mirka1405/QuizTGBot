@@ -246,10 +246,13 @@ async def receive_person_cost(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not test:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_noactivetest"),reply_markup=[[Settings.get_locale("button_starttest")]])
         return NO
-    
     if update.message.text not in Settings.skip_locales:
+        try:
+            float(update.message.text)
+        except ValueError:
+            await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_positive_number"))
+            return PERSON_COST
         test.person_cost = update.message.text
-    
     # Prepare all questions
     all_questions = []
     role_data = Settings.roles[test.role]
