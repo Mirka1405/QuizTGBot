@@ -54,7 +54,7 @@ def generate_spidergram(categories, values, title, color='darkblue'):
     
     return img_buffer
 
-def generate_double_spidergram(vals1:dict,vals2:dict,title):
+def generate_double_spidergram(category_locales:dict[str,str],vals1:dict,vals2:dict,title):
     """vals1 and vals2 are dict with the same keys."""
     num_vars = len(vals1)
     values1,values2 = [],[]
@@ -82,7 +82,7 @@ def generate_double_spidergram(vals1:dict,vals2:dict,title):
     # Customize axes
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
-    ax.set_thetagrids(np.degrees(angles[:-1]), labels=list(vals1.keys()), fontsize=16)
+    ax.set_thetagrids(np.degrees(angles[:-1]), labels=[category_locales[x] for x in vals1.keys()], fontsize=16)
     
     # Set y-axis
     max_val = max(values1+values2)

@@ -570,6 +570,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
                                f"Индекс максимума команды", "darkblue")
         else:
             img_buffer = generate_double_spidergram(
+                Settings.categories_locales,
                 group.score,
                 manager_results,
                 f"Индекс максимума команды"
@@ -712,12 +713,14 @@ async def generate_recommendations_group(test: Test, user_id) -> str:
     
     free_emoji = Settings.config["free_rec_emoji"]
     paid_emoji = Settings.config["paid_rec_emoji"]
-    
+    cursor = Settings.db.conn.cursor()
     results = {}
+    cursor.execute("SELECT id, name FROM categories")
+    categories = {row[0]: row[1] for row in cursor.fetchall()}
     for cat_id, score in test.score.items():
         category = role_data.questions[cat_id]
         category_score = score
-        results[category.display_name] = category_score
+        results[cat_id] = category_score
         category_score = round(category_score,1)
         if category_score == 10: continue
         if category_score == 10:
@@ -734,7 +737,7 @@ async def generate_recommendations_group(test: Test, user_id) -> str:
             recs += Settings.get_locale("aspect_percentage").format(Settings.categories_locales[cat_id], category_score) + \
                     "<br>".join(f"{free_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["free"]) + "<br>" + \
                     "<br>".join(f"{paid_emoji}{i}" for i in Settings.recommendations["weak"][cat_id]["paid"]) + "<br><br>"
-    cursor = Settings.db.conn.cursor()
+    
     cursor.execute("SELECT id FROM results WHERE telegram_username = ? AND role = 'Manager' ORDER BY timestamp DESC LIMIT 1",(user_id,))
     rid = cursor.fetchall()
     manager_results = {}
@@ -754,10 +757,10 @@ async def generate_recommendations_group(test: Test, user_id) -> str:
         for row in cursor.fetchall():
             category_id, category_name, avg_score = row
             manager_results[category_name] = avg_score
-    if len(list(manager_results.keys()))==0:
+    if not manager_results:
         image = generate_spidergram(list(results.keys()), list(results.values()),
                             f"Индекс максимума команды", "darkblue")
-    else: image = generate_double_spidergram(results, manager_results,f"Индекс максимума команды.")
+    else: image = generate_double_spidergram(Settings.categories_locales, results, manager_results,f"Индекс максимума команды.")
     return recs,image
 
 async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
