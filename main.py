@@ -696,7 +696,7 @@ async def generate_recommendations(test: Test) -> str:
                                f"Индекс максимума команды. Роль: {Settings.roles[test.role].display_name}",
                                "darkred" if test.role=="Manager" else "darkblue")
     return recs,image
-async def generate_recommendations_group(test: Test, user_id) -> str:
+async def generate_recommendations_group(test: Test, user_id) -> tuple[str,BytesIO]:
     """Generate recommendation text based on test results"""
     role_data = Settings.roles[test.role]
     average = round(test.average, 2)
@@ -912,6 +912,7 @@ async def results_to_pdf(is_group_test: bool,
                          main_recommendation: str,
                          open_answers: list[str],
                          email_recommendation: str,
+                         image: BytesIO | None = None
                          ):
     form_data = {
         'type': f'{"Групповой" if is_group_test else "Индивидуальный"}\nотчет',
@@ -923,9 +924,10 @@ async def results_to_pdf(is_group_test: bool,
         'recommendations':  pdf_generator.FillinElement(email_recommendation,12,False),
         'contacts':Settings.get_locale("pdf_contacts").format("@"+Settings.config["consultation_tg"],Settings.config["owner_mail"]),
         'link': Settings.config["link"],
-        'date': datetime.datetime.today().strftime('%d.%m.%Y')
+        'date': datetime.datetime.today().strftime('%d.%m.%Y'),
+        'image':'ewfewe'
     }
-    return pdf_generator.replace_placeholders_htmlbox('pdf_template.pdf', form_data)
+    return pdf_generator.replace_placeholders_htmlbox('pdf_template.pdf', form_data, image=image)
 
 
 async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -1029,7 +1031,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
         open_answers_list.append(answer)
 
     legend = Settings.get_locale("email_legend").replace("EMOJIFREE",Settings.config["free_rec_emoji"]).replace("EMOJIPAID",Settings.config["paid_rec_emoji"])
-    pdf = await results_to_pdf(True,team_size_group,len(results)//len(category_scores),test.average,result_text+recomms_text,open_answers_list,recs+"<br>"+legend)
+    pdf = await results_to_pdf(True,team_size_group,len(results)//len(category_scores),test.average,result_text+recomms_text,open_answers_list,recs+"<br>"+legend,image)
     await send_results_by_email(recs_email, email, image, None, pdf)
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_sent"))
 

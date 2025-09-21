@@ -14,7 +14,12 @@ def replace_placeholders_htmlbox(
     fontfile: str = "montserrat.ttf",
     height_ratio: float = 0.90,
     left_padding_px: int = 0,
+    image: io.BytesIO | None = None
 ):
+    has_image = False
+    if isinstance(image,io.BytesIO):
+        image.seek(0)
+        has_image = True
     doc = fitz.open(input_pdf)
     base_css = f"""
     .val {{
@@ -27,20 +32,33 @@ def replace_placeholders_htmlbox(
 
     for page in doc:
         jobs: list[tuple[fitz.Rect, str]] = []
+        image_rects: list[fitz.Rect] = []
 
         # 1) Find all {key} occurrences on this page
         for k, v in mapping.items():
             needle = f"{{{{{k}}}}}"
             for rect in page.search_for(needle):
-                jobs.append((rect, v))
-                # Mask the original placeholder with a white redaction
-                page.add_redact_annot(rect, fill=(1, 1, 1))
+                if has_image and k == "image":
+                    # Handle image separately
+                    image_rects.append(rect)
+                    # Mask the original placeholder with a white redaction
+                    page.add_redact_annot(rect, fill=(1, 1, 1))
+                else:
+                    # Handle text placeholders
+                    jobs.append((rect, v))
+                    # Mask the original placeholder with a white redaction
+                    page.add_redact_annot(rect, fill=(1, 1, 1))
 
-        if not jobs:
+
+        if not jobs and not image_rects:
             continue
-
-        # 2) Apply redactions (actually removes original text)
         page.apply_redactions()
+        for rect in image_rects:
+            # Reset image stream position and insert image
+            image.seek(0)
+            # You can adjust the image position/size as needed
+            img_rect = fitz.Rect(rect.x0, rect.y0, page.rect.x1-rect.x0, page.rect.y1-100)
+            page.insert_image(img_rect, stream=image.read())
 
         # 3) Re-insert values using HTML (Unicode-safe)
         for rect, value in jobs:
