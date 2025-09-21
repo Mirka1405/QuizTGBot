@@ -14,7 +14,6 @@ from subprocess import PIPE
 import asyncio
 import sys
 
-import pip
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -40,7 +39,10 @@ NO, INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMA
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, response_code: str | None = None):
     val = Settings.button_callbacks.get(response_code if response_code else update.message.text)
     if val: return await val(update,context)
-    states = {INDUSTRY:receive_industry,ROLE:receive_role,TEAM_SIZE:receive_team_size,PERSON_COST:receive_person_cost,QUESTION:receive_answer,OPEN_QUESTION:receive_open_answer,GETTING_EMAIL:receive_email,GETTING_GROUP_EMAIL:receive_group_email}
+    states = {INDUSTRY:receive_industry,ROLE:receive_role,TEAM_SIZE:receive_team_size,
+              PERSON_COST:receive_person_cost,QUESTION:receive_answer,
+              OPEN_QUESTION:receive_open_answer,GETTING_EMAIL:receive_email,
+              GETTING_GROUP_EMAIL:receive_group_email}
     state = context.user_data.get("state")
     if not state or state>=STATEAMOUNT or state==NO: return
     value = await states[state](update,context)
@@ -58,7 +60,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     grouptesttext = Settings.get_locale("button_grouptest")
     Settings.skip_locales.add(Settings.get_locale("button_skip"))
 
-    Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,"getgrouprecommendations":get_group_recommendations,"grouptestresults":group_test_results})
+    Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,
+                                 "getgrouprecommendations":get_group_recommendations,"grouptestresults":group_test_results})
 
     kb = [[InlineKeyboardButton(starttesttext,callback_data="starttest")]]
     
@@ -357,8 +360,6 @@ async def send_results_by_email(text: str,toemail:str,image:io.BytesIO|None,csv:
     if not 'email' in Settings.config:
         print("Email configuration not found")
         return
-    if csv: text+=Settings.get_locale("email_csv_attached")
-    if pdf: text+=Settings.get_locale("email_pdf_attached")
     email_config = Settings.config['email']
     
     msg = MIMEMultipart()
@@ -446,14 +447,10 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
         return
     
-    company_ids = [company[0] for company in companies]
-    
-    # Get all results for these companies
-    placeholders = ','.join('?' for _ in company_ids)
     cursor.execute(f"""
         SELECT * FROM results 
-        WHERE company_id IN ({placeholders})
-    """, company_ids)
+        WHERE company_id = ?
+    """, (companies[0][0],))
     
     results = cursor.fetchall()
     
@@ -463,7 +460,6 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # Initialize aggregation variables
     all_scores = {}
-    all_open_answers = {}
     industry = None
     team_size = None
     person_cost = None
@@ -494,22 +490,6 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 all_scores[category_name] = []
             all_scores[category_name].append(answer)
         
-        # Get open answers for this result
-        cursor.execute("""
-            SELECT sq.text, sa.answer 
-            FROM str_answers sa
-            JOIN str_questions sq ON sa.question_id = sq.id
-            WHERE sa.id = ?
-        """, (result_id,))
-        
-        str_answers = cursor.fetchall()
-        
-        # Aggregate open answers
-        for question, answer in str_answers:
-            if question not in all_open_answers:
-                all_open_answers[question] = ""
-            all_open_answers[question]+=answer+"\n"
-        
         # Get first non-null values for industry, team_size, person_cost
         if industry is None and result[4]:  # industry field
             industry = result[4]
@@ -530,8 +510,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     aggregated_test.person_cost = person_cost or None
     aggregated_test.role = "Manager"
     aggregated_test.score = average_scores
-    aggregated_test.open_answers = all_open_answers
-    aggregated_test.force_average_by_score = True  # Use average of category averages
+    aggregated_test.force_average_by_score = True
     
     await finish_test(update, context, aggregated_test)
 
@@ -615,9 +594,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             person_cost = float(test.person_cost)
             loss = (1 - average_unrounded/10) * person_cost
             total_loss = loss * float(test.team_size)
-            loss_text=Settings.get_locale("results_losscalc").format(
-                    round(100-average_unrounded*10), round(total_loss)
-                )
+            loss_text=Settings.get_locale("results_losscalc").format(round(total_loss))
     
         if min(results.values())<10:
             additions = [k for k,v in results.items() if v<10]
@@ -681,10 +658,16 @@ async def generate_recommendations(test: Test) -> str:
     """Generate recommendation text based on test results"""
     role_data = Settings.roles[test.role]
     average = round(test.average, 2)
+    loss_text = ""
+    if test.person_cost:
+        person_cost = float(test.person_cost)
+        loss = (1 - test.average/10) * person_cost
+        total_loss = loss * float(test.team_size)
+        loss_text=Settings.get_locale("results_losscalc").format(round(total_loss))
     if average==10:
         recs = Settings.get_locale("email_perfect")
     else:
-        recs = Settings.get_locale("email_score").format(average, round(100-average*10,2))
+        recs = Settings.get_locale("email_score").format(average, round(100-average*10,2),Settings.get_locale("results_losscalc").format(loss_text))
     free_emoji = Settings.config["free_rec_emoji"]
     paid_emoji = Settings.config["paid_rec_emoji"]
     
@@ -717,10 +700,17 @@ async def generate_recommendations_group(test: Test, user_id) -> str:
     """Generate recommendation text based on test results"""
     role_data = Settings.roles[test.role]
     average = round(test.average, 2)
+    loss_text = ""
+    if test.person_cost:
+        person_cost = float(test.person_cost)
+        loss = (1 - test.average/10) * person_cost
+        total_loss = loss * float(test.team_size)
+        loss_text=Settings.get_locale("results_losscalc").format(round(total_loss))
     if average==10:
         recs = Settings.get_locale("email_perfect")
     else:
-        recs = Settings.get_locale("email_score").format(average, round(100-average*10,2))
+        recs = Settings.get_locale("email_score").format(average, round(100-average*10,2), loss_text)
+    
     free_emoji = Settings.config["free_rec_emoji"]
     paid_emoji = Settings.config["paid_rec_emoji"]
     
@@ -928,10 +918,9 @@ async def results_to_pdf(is_group_test: bool,
         'amnt': str(respondents),
         'tmi': str(round(tmi,2)),
         'main_text': pdf_generator.FillinElement(main_recommendation,12),
-        'open_answers': pdf_generator.FillinElement("• "+"\n• ".join(open_answers),16), #'• помидор\n\n• огурец',
+        'open_answers': pdf_generator.FillinElement("• "+"\n• ".join(open_answers) if open_answers else "Ни один сотрудник не отправил своего ответа.",16), #'• помидор\n\n• огурец',
         'recommendations':  pdf_generator.FillinElement(email_recommendation,12,False),
-        'tg': "@"+Settings.config["consultation_tg"],
-        'email': Settings.config["owner_mail"],
+        'contacts':Settings.get_locale("pdf_contacts").format("@"+Settings.config["consultation_tg"],Settings.config["owner_mail"]),
         'link': Settings.config["link"],
         'date': datetime.datetime.today().strftime('%d.%m.%Y')
     }
@@ -1002,24 +991,23 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # Add group-specific information to the email
     group_info = Settings.get_locale("group_test_results_amount").format(participant_count)
-    recs = group_info + "\n<br>" + recs
+    recs_email = group_info + "\n<br>" + recs
 
     loss_text = ""
     if test.person_cost:
         person_cost = float(test.person_cost)
         loss = (1 - test.average/10) * person_cost
         total_loss = loss * float(test.team_size)
-        loss_text=Settings.get_locale("results_losscalc").format(
-                round(100-test.average*10), round(total_loss)
-            )
+        loss_text=Settings.get_locale("results_losscalc").format(round(total_loss))
     result_text = ""
     recomms_text = ""
     if min(test.score.values())<10:
         additions = [k for k,v in test.score.items() if v<10]
         if not additions: additions = [k for k,v in test.score.items() if v<=min(test.score.values())]
+        additions = map(lambda x:Settings.categories_locales[x], additions)
         recomms_text+="\n• "+";\n• ".join(additions)
         recomms_text+="."
-        result_text = Settings.get_locale("results").format(round(test.average,2),round(100-test.average*10,1),loss_text)
+        result_text = loss_text+" "+Settings.get_locale("pdf_results").format(round(100-test.average*10,1))
     else:
         result_text = Settings.get_locale("results_perfect")
 
@@ -1041,7 +1029,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     legend = Settings.get_locale("email_legend").replace("EMOJIFREE",Settings.config["free_rec_emoji"]).replace("EMOJIPAID",Settings.config["paid_rec_emoji"])
     pdf = await results_to_pdf(True,team_size_group,len(results)//len(category_scores),test.average,result_text+recomms_text,open_answers_list,recs+"<br>"+legend)
-    await send_results_by_email(recs, email, image, await results_to_csv(update,context), pdf)
+    await send_results_by_email(recs_email, email, image, None, pdf)
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_sent"))
 
     # Clean up
