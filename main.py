@@ -37,7 +37,8 @@ from engine import *
 STATEAMOUNT = 9
 NO, INDUSTRY, ROLE, TEAM_SIZE, PERSON_COST, QUESTION, OPEN_QUESTION, GETTING_EMAIL, GETTING_GROUP_EMAIL = range(STATEAMOUNT)
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, response_code: str | None = None):
-    val = Settings.button_callbacks.get(response_code if response_code else update.message.text)
+    if not (update.effective_message or response_code): return
+    val = Settings.button_callbacks.get(response_code if response_code else update.effective_message.text)
     if val: return await val(update,context)
     states = {INDUSTRY:receive_industry,ROLE:receive_role,TEAM_SIZE:receive_team_size,
               PERSON_COST:receive_person_cost,QUESTION:receive_answer,
@@ -782,6 +783,8 @@ async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not res:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
         return NO
+    cursor.execute("INSERT INTO recommendations (username) VALUES (?)",(user_id,))
+    Settings.db.conn.commit()
     if res[0]==10:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
         return NO
@@ -885,7 +888,8 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
     if participant_count == 0:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_group_notest"))
         return NO
-    
+    cursor.execute("INSERT INTO recommendations (username,group_id) VALUES (?,?)",(user_id,company_id))
+    Settings.db.conn.commit()
     # Get average score for the group
     cursor.execute("""
         SELECT AVG(average_ti) FROM results 

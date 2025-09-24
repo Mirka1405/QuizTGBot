@@ -222,6 +222,11 @@ class DatabaseManager:
             answer TEXT,
             PRIMARY KEY (id, question_id)
         );
+                             
+        CREATE TABLE IF NOT EXISTS recommendations (
+            username INTEGER REFERENCES results(telegram_username),
+            group_id INTEGER REFERENCES companies(id) DEFAULT NULL
+        );
         """)
         self.conn.commit()
     def _init_categories(self):
