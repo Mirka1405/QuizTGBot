@@ -73,7 +73,7 @@ def generate_double_spidergram(category_locales:dict[str,str],vals1:dict,vals2:d
     # Create figure
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
     # Plot data
-    ax.plot(angles, values1, color='blue', linewidth=2, linestyle='solid',label='Вся команда')
+    ax.plot(angles, values1, color='blue', linewidth=2, linestyle='solid',label='Сотрудники')
     ax.fill(angles, values1, color='blue', alpha=0.25)
     ax.plot(angles, values2, color='red', linewidth=2, linestyle='solid',label="Руководитель")
     ax.fill(angles, values2, color='red', alpha=0.25)

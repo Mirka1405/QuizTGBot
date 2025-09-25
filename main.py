@@ -474,6 +474,7 @@ async def group_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # Process each result
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("group_test_results_amount").format(len(results)))
+    context.user_data["group_amount"] = len(results)
     for result in results:
         result_id = result[0]
         
@@ -573,12 +574,23 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             img_buffer = generate_spidergram(list(results.keys()), list(group.score.values()),
                                f"Индекс максимума команды", "darkblue")
         else:
-            img_buffer = generate_double_spidergram(
-                Settings.categories_locales,
-                group.score,
-                manager_results,
-                f"Индекс максимума команды"
-            )
+            # manager_result * 1 + x * (amount - 1) = group_score * amount
+            # x = (group_score * amount - manager_result)/(amount - 1)
+            amount = context.user_data["group_amount"]
+            if amount <= 1:
+                img_buffer = generate_spidergram(list(results.keys()), list(group.score.values()),
+                               f"Индекс максимума команды", "darkred")
+            else:
+                employee_results = {}
+                for i in group.score.keys():
+                    employee_results[i] = (group.score[i] * amount - manager_results[i])/(amount-1)
+                img_buffer = generate_double_spidergram(
+                    Settings.categories_locales,
+                    employee_results,
+                    manager_results,
+                    f"Индекс максимума команды"
+                )
+            del context.user_data["group_amount"]
     sum_up_text=""
     loss_text=""
     recomms_text = ""
@@ -764,7 +776,15 @@ async def generate_recommendations_group(test: Test, user_id) -> tuple[str,Bytes
     if not manager_results:
         image = generate_spidergram(list(results.keys()), list(results.values()),
                             f"Индекс максимума команды", "darkblue")
-    else: image = generate_double_spidergram(Settings.categories_locales, results, manager_results,f"Индекс максимума команды.")
+    else:
+        amount = cursor.execute("SELECT COUNT(*) FROM results").fetchone()
+        if amount <= 1: image = generate_spidergram(list(results.keys()), list(results.values()),
+                            f"Индекс максимума команды", "darkred")
+        else:
+            employee_results = {}
+            for i in results.keys():
+                employee_results[i] = (results[i] * amount - manager_results[i])/(amount-1)
+            image = generate_double_spidergram(Settings.categories_locales, employee_results, manager_results,f"Индекс максимума команды.")
     return recs,image
 
 async def get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
