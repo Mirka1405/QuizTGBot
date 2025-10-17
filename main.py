@@ -778,12 +778,13 @@ async def generate_recommendations_group(test: Test, user_id) -> tuple[str,Bytes
                             f"Индекс максимума команды", "darkblue")
     else:
         amount = cursor.execute("SELECT COUNT(*) FROM results").fetchone()
-        if amount <= 1: image = generate_spidergram(list(results.keys()), list(results.values()),
+        if not amount: return recs,BytesIO()
+        if amount[0] <= 1: image = generate_spidergram(list(results.keys()), list(results.values()),
                             f"Индекс максимума команды", "darkred")
         else:
             employee_results = {}
             for i in results.keys():
-                employee_results[i] = (results[i] * amount - manager_results[i])/(amount-1)
+                employee_results[i] = (results[i] * amount[0] - manager_results[i])/(amount[0]-1)
             image = generate_double_spidergram(Settings.categories_locales, employee_results, manager_results,f"Индекс максимума команды.")
     return recs,image
 
