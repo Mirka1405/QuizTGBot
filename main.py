@@ -27,6 +27,7 @@ from telegram.ext import (
 from dotenv import load_dotenv
 from os import getenv
 
+import datascience
 import pdf_generator
 from spidergram import *
 
@@ -1143,6 +1144,23 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         await context.bot.send_message(update.effective_message.chat_id,f"Error: {str(e)}")
 
+async def data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send requested file (admin only)"""
+    if not await check_admin(update):
+        return
+    if not context.args:
+        await context.bot.send_message(update.effective_message.chat_id,datascience.main(),reply_markup=ReplyKeyboardMarkup(datascience.keyboard(),resize_keyboard=True))
+        return
+    if not context.args[0].isidentifier(): await context.bot.send_message(update.effective_message.chat_id,"404")
+    val = eval(f"datascience.{context.args[0]}.{context.args[0]}()")
+    if isinstance(val,str):
+        await context.bot.send_message(update.effective_message.chat_id,val,parse_mode='Markdown')
+    elif isinstance(val,BytesIO):
+        await update.message.reply_photo(val)
+    elif isinstance(val,io.StringIO):
+        await update.message.reply_document(val,filename="answers.txt")
+    else: await context.bot.send_message(update.effective_message.chat_id,"500")
+    
 async def put_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Receive and save file (admin only)"""
     if not await check_admin(update):
@@ -1239,6 +1257,7 @@ def main() -> None:
     application.add_handler(CommandHandler("ping", ping))
     application.add_handler(CommandHandler("pong", ping))
     application.add_handler(CommandHandler("update", update_command))
+    application.add_handler(CommandHandler("data", data))
     
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
