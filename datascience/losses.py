@@ -5,7 +5,7 @@ import numpy as np
 def sanitize_column_std(df: pd.DataFrame,col: str):
     std = df[col].std()
     return df[(df[col]>df[col].mean()-3*std)&(df[col]<df[col].mean()+3*std)]
-def losses_in_roubles():
+def losses():
     with sqlite3.connect('database.db') as conn:
         restr = 'WHERE telegram_username NOT IN ("irsamo","mironsam1405","vvitalieva","ya_lukyanova")'
         df = pd.read_sql_query(f"SELECT * FROM results {restr}",conn)
