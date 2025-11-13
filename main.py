@@ -62,7 +62,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     grouptesttext = Settings.get_locale("button_grouptest")
     Settings.skip_locales.add(Settings.get_locale("button_skip"))
 
-    Settings.add_button_locales({"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,
+    Settings.add_button_locales({"start":start,"starttest":start_test,"grouptest":group_test,"getrecommendations":get_recommendations,
                                  "getgrouprecommendations":get_group_recommendations,"grouptestresults":group_test_results})
 
     kb = [[InlineKeyboardButton(starttesttext,callback_data="starttest")]]
@@ -623,7 +623,7 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
             result_text = Settings.get_locale("results_perfect")
 
     if not context.user_data.get("company_id"):
-        buttons = [[InlineKeyboardButton(markup,callback_data=callbackstr)]]
+        buttons = [[InlineKeyboardButton(Settings.get_locale("button_start"),callback_data="start")],[InlineKeyboardButton(markup,callback_data=callbackstr)]]
         
         await context.bot.send_photo(
                 update.effective_message.chat_id,
@@ -636,16 +636,18 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE, group:
         message = await context.bot.send_message(update.effective_message.chat_id,".",reply_markup=ReplyKeyboardRemove())
         await message.delete()
     else:
-        markup_buttons = ReplyKeyboardRemove()
-        if test.role=="Manager": markup_buttons = InlineKeyboardMarkup([[InlineKeyboardButton(markup,callback_data=callbackstr)]])
+        markup_buttons = [[InlineKeyboardButton(Settings.get_locale("button_start"),callback_data="start")]]
+        if test.role=="Manager": markup_buttons.append([InlineKeyboardButton(markup,callback_data=callbackstr)])
         await context.bot.send_photo(
                 update.effective_message.chat_id,
                 img_buffer,
                 Settings.get_locale("results_manager_group" if test.role == "Manager" else "results_employee").format(average,"@"+Settings.config["consultation_tg"]),
-                reply_markup=markup_buttons,
+                reply_markup=InlineKeyboardMarkup(markup_buttons),
                 parse_mode="HTML",
                 message_thread_id=update.effective_message.message_thread_id,
              )
+        message = await context.bot.send_message(update.effective_message.chat_id,".",reply_markup=ReplyKeyboardRemove())
+        await message.delete()
     context.user_data.clear()
     return NO
 async def stop_group_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -906,6 +908,7 @@ async def get_group_recommendations(update: Update, context: ContextTypes.DEFAUL
     """, (company_id,))
     
     participant_count = cursor.fetchone()[0]
+    context.user_data["participant_count"] = participant_count
     
     if participant_count == 0:
         await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_group_notest"))
@@ -957,7 +960,6 @@ async def results_to_pdf(is_group_test: bool,
         'image':'ewfewe'
     }
     return pdf_generator.replace_placeholders_htmlbox('pdf_template.pdf', form_data, image=image)
-
 
 async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Generate and send group recommendations email"""
@@ -1060,7 +1062,7 @@ async def receive_group_email(update: Update, context: ContextTypes.DEFAULT_TYPE
         open_answers_list.append(answer)
 
     legend = Settings.get_locale("email_legend").replace("EMOJIFREE",Settings.config["free_rec_emoji"]).replace("EMOJIPAID",Settings.config["paid_rec_emoji"])
-    pdf = await results_to_pdf(True,team_size_group,len(results)//len(category_scores),test.average,result_text+recomms_text,open_answers_list,recs+"<br>"+legend,image)
+    pdf = await results_to_pdf(True,team_size_group,context.user_data["participant_count"],test.average,result_text+recomms_text,open_answers_list,recs+"<br>"+legend,image)
     await send_results_by_email(recs_email, email, image, None, pdf)
     await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_sent"))
 
@@ -1145,7 +1147,6 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await context.bot.send_message(update.effective_message.chat_id,f"Error: {str(e)}")
 
 async def data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send requested file (admin only)"""
     if not await check_admin(update):
         return
     if not context.args:
@@ -1218,7 +1219,234 @@ async def shutdown(application: Application):
     await application.shutdown()
     exit(1)
 
+async def sudo_get_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Admin only: get other user's recommendations."""
+    if not await check_admin(update) or len(context.args)<2:
+        return
+    user_id = context.args[0]
+    
+    cursor = Settings.db.conn.cursor()
+    cursor.execute("""
+        SELECT average_ti FROM results 
+        WHERE telegram_username = ?
+        ORDER BY id DESC
+        LIMIT 1
+    """, (user_id,))
 
+    res = cursor.fetchone()
+    if not res:
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
+        return NO
+    if res[0]==10:
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
+        return NO
+    
+    """Now that we have email, generate and send recommendations"""
+    if not is_valid_email(context.args[1]):
+        return NO
+
+    # Fetch data and generate recommendations only now
+    cursor = Settings.db.conn.cursor()
+    
+    # Get basic result info
+    cursor.execute("""
+        SELECT id, role, industry, team_size, person_cost, average_ti 
+        FROM results 
+        WHERE telegram_username = ?
+        ORDER BY timestamp DESC 
+        LIMIT 1
+    """, (user_id,))
+    result = cursor.fetchone()
+    
+    if not result:
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_notest"))
+        return NO
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_generating"))
+    
+    result_id, role, industry, team_size, person_cost, average_ti = result
+    
+    test = Test(update.effective_user.id)
+    test.role = role
+    test.industry = industry
+    test.team_size = team_size
+    test.person_cost = person_cost
+    test.score = {}
+    test.force_average_by_score = True
+
+    cursor.execute("""
+        SELECT nq.category_id, nq.text, na.answer
+        FROM num_answers na
+        JOIN num_questions nq ON na.question_id = nq.id
+        WHERE na.id = ?
+    """, (result_id,))
+    
+    # Calculate category averages
+    category_scores = {}
+    cat_names = list(Settings.categories_locales.keys())
+    for cat_id, question_text, answer in cursor.fetchall():
+        cat_name = cat_names[cat_id-1]
+        if cat_name not in category_scores:
+            category_scores[cat_name] = {'sum': 0, 'count': 0}
+        category_scores[cat_name]['sum'] += answer
+        category_scores[cat_name]['count'] += 1
+    
+    for cat_id, scores in category_scores.items():
+        test.score[cat_id] = scores['sum'] / scores['count'] if scores['count'] > 0 else 0
+    
+
+    # Generate and send recommendations
+    recs, image = await generate_recommendations(test)
+    await send_results_by_email(recs, context.args[1], image)
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_sent"))
+
+    return NO
+
+async def sudo_get_group_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Start the email conversation for group results - verify test exists"""
+    user_id = context.args[0]
+    cursor = Settings.db.conn.cursor()
+
+    cursor.execute("""
+        SELECT company_id FROM results
+        WHERE telegram_username = ? AND company_id NOT NULL
+        ORDER BY id DESC
+        LIMIT 1
+    """, (user_id,))
+    
+    company = cursor.fetchone()
+    if not company:
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_nogrouptest"))
+        return NO
+    
+    company_id = company[0]
+    
+    # Count number of people who took the test in this company
+    cursor.execute("""
+        SELECT COUNT(*) FROM results 
+        WHERE company_id = ?
+    """, (company_id,))
+    
+    participant_count = cursor.fetchone()[0]
+    
+    if participant_count == 0:
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_group_notest"))
+        return NO
+    # Get average score for the group
+    cursor.execute("""
+        SELECT AVG(average_ti) FROM results 
+        WHERE company_id = ?
+    """, (company_id,))
+    
+    avg_score = cursor.fetchone()[0] or 0
+    
+    if avg_score == 10:
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_perfect").format("@"+Settings.config["consultation_tg"]))
+        return NO
+
+    """Generate and send group recommendations email"""
+    email = context.args[1]
+    if not is_valid_email(email):
+        return NO
+    
+    if not company_id:
+        await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("error_nogrouptest"))
+        return NO
+
+    cursor = Settings.db.conn.cursor()
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_generating"))
+    
+    # Get aggregated results for the company (similar to stop_group_test logic)
+    cursor.execute("""
+        SELECT r.role, r.industry, r.team_size, r.person_cost, 
+               c.name, AVG(na.answer)
+        FROM results r
+        JOIN num_answers na ON r.id = na.id
+        JOIN num_questions nq ON na.question_id = nq.id
+        JOIN categories c ON nq.category_id = c.id
+        WHERE r.company_id = ?
+        GROUP BY c.id, c.name, r.role, r.industry, r.team_size, r.person_cost
+        ORDER BY c.id
+    """, (company_id,))
+
+    # Calculate category averages across all participants
+    category_scores = {}
+    results = cursor.fetchall()
+    person_cost_group = None
+    team_size_group = None
+    industry_group = None
+    for row in results:
+        role, industry, team_size, person_cost, category_name, avg_score = row
+        if category_name not in category_scores:
+            category_scores[category_name] = []
+        if team_size and not team_size_group: team_size_group=team_size
+        if industry and not industry_group: industry_group=industry
+        if person_cost and not person_cost_group: person_cost_group=person_cost
+        category_scores[category_name].append(avg_score)
+
+    # Create aggregated test object
+    test = Test(company_id)
+    test.role = "Manager"
+    test.industry = industry_group
+    test.team_size = team_size_group
+    test.person_cost = person_cost_group
+    test.score = {}
+    test.force_average_by_score = True
+
+    # Calculate final category averages
+    for category_name, scores in category_scores.items():
+        test.score[category_name] = sum(scores) / len(scores) if scores else 0
+
+    # Generate recommendations
+    recs, image = await generate_recommendations_group(test,user_id)
+    
+    # Add group-specific information to the email
+    group_info = Settings.get_locale("group_test_results_amount").format(participant_count)
+    recs_email = group_info + "\n<br>" + recs
+
+    loss_text = ""
+    if test.person_cost:
+        person_cost = float(test.person_cost)
+        loss = (1 - test.average/10) * person_cost
+        total_loss = loss * float(test.team_size)
+        loss_text=Settings.get_locale("results_losscalc").format(round(total_loss))
+    result_text = ""
+    recomms_text = ""
+    if min(test.score.values())<10:
+        additions = [k for k,v in test.score.items() if v<10]
+        if not additions: additions = [k for k,v in test.score.items() if v<=min(test.score.values())]
+        additions = map(lambda x:Settings.categories_locales[x], additions)
+        recomms_text+="\n• "+";\n• ".join(additions)
+        recomms_text+="."
+        result_text = loss_text+" "+Settings.get_locale("pdf_results").format(round(100-test.average*10,1))
+    else:
+        result_text = Settings.get_locale("results_perfect")
+
+
+    cursor.execute("""
+        SELECT sq.text, sa.answer 
+        FROM str_answers sa
+        JOIN str_questions sq ON sa.question_id = sq.id
+        JOIN results r ON sa.id = r.id
+        WHERE r.company_id = ?
+    """, (company_id,))
+    
+    open_answers = cursor.fetchall()
+    
+    # Process open answers into a list of strings
+    open_answers_list = []
+    for question, answer in open_answers:
+        open_answers_list.append(answer)
+
+    legend = Settings.get_locale("email_legend").replace("EMOJIFREE",Settings.config["free_rec_emoji"]).replace("EMOJIPAID",Settings.config["paid_rec_emoji"])
+    pdf = await results_to_pdf(True,team_size_group,participant_count,test.average,result_text+recomms_text,open_answers_list,recs+"<br>"+legend,image)
+    await send_results_by_email(recs_email, email, image, None, pdf)
+    await context.bot.send_message(update.effective_message.chat_id,Settings.get_locale("email_sent"))
+
+    # Clean up
+    context.user_data.pop('group_email_data', None)
+    
+    return NO
+    
 async def clear_webhook(application: Application):
     try:
         await application.bot.delete_webhook(drop_pending_updates=True)
@@ -1257,6 +1485,8 @@ def main() -> None:
     application.add_handler(CommandHandler("ping", ping))
     application.add_handler(CommandHandler("pong", ping))
     application.add_handler(CommandHandler("update", update_command))
+    application.add_handler(CommandHandler("sudo_grouprecomm", sudo_get_group_recommendations))
+    application.add_handler(CommandHandler("sudo_recomm", sudo_get_recommendations))
     application.add_handler(CommandHandler("data", data))
     
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

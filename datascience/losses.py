@@ -14,19 +14,21 @@ def losses():
     df1,df2 = df[df["company_id"].notna()],df[df["company_id"].isna()]
     avg_ti1 = df1[df1["estimated_losses"].notna()]["average_ti"].mean()
     avg_ti2 = df2[df2["estimated_losses"].notna()]["average_ti"].mean()
+    dfall = df.dropna(inplace=False,subset=["person_cost","team_size","average_ti"])
     r = f"""--- Потери у всех: ---
+Полные потери (потери на человека умножить на кол-во человек): {((dfall["person_cost"]*dfall["team_size"])*(1-dfall["average_ti"]*0.1)).sum():.2f}
 Потери в рублях: {df["estimated_losses"].dropna(inplace=False).mean():.2f}
-Потери в рублях на человека: {df["person_cost"].dropna(inplace=False).mean():.2f}
+Потери в рублях на человека: {df["person_cost"].dropna(inplace=False).mean()*(1-avg_ti*0.1):.2f}
 Потери в процентах: {100-avg_ti*10:.2f}%
 Средний ИМК (кто указывал стоимость): {avg_ti:.2f}/10
 --- Потери в командах: ---
 Потери в рублях: {df1["estimated_losses"].dropna(inplace=False).mean():.2f}
-Потери в рублях на человека: {df1["person_cost"].dropna(inplace=False).mean():.2f}
+Потери в рублях на человека: {df1["person_cost"].dropna(inplace=False).mean()*(1-avg_ti1*0.1):.2f}
 Потери в процентах: {100-avg_ti1*10:.2f}%
 Средний ИМК (кто указывал стоимость): {avg_ti1:.2f}/10
 --- Потери индивидуально: --- 
 Потери в рублях: {df2["estimated_losses"].dropna(inplace=False).mean():.2f}
-Потери в рублях на человека: {df2["person_cost"].dropna(inplace=False).mean():.2f}
+Потери в рублях на человека: {df2["person_cost"].dropna(inplace=False).mean()*(1-avg_ti2*0.1):.2f}
 Потери в процентах: {100-avg_ti2*10:.2f}%
 Средний ИМК (кто указывал стоимость): {avg_ti2:.2f}/10"""
     return r
